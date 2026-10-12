@@ -1,0 +1,54 @@
+# DeepSeek Harness 站点：__DOMAIN__ → 127.0.0.1:__PORT__
+# 由 setup-nginx.sh 渲染后写到 /etc/nginx/conf.d/__DOMAIN__.conf，不要直接复制本文件
+# 注意：第一个 server 块（80 端口）必须在最前面并以顶格的 } 结尾，脚本在签证书前会单独截取它
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name __DOMAIN__;
+
+    # certbot webroot 验证（与本机其他站点共用 /var/www/certbot）
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+        default_type "text/plain";
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name __DOMAIN__;
+
+    ssl_certificate     /etc/letsencrypt/live/__DOMAIN__/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/__DOMAIN__/privkey.pem;
+
+    client_max_body_size 50m;
+
+    location / {
+        proxy_pass http://127.0.0.1:__PORT__;
+        proxy_http_version 1.1;
+
+        # dsh 会校验 Host，必须原样转发浏览器看到的地址
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # 页面靠 WebSocket 推送会话进度
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+
+        # 后端是明文 HTTP，签发的会话 cookie 不带 Secure；对外是 HTTPS，在这里补上
+        proxy_cookie_flags ~ secure;
+
+        # 智能体任务和流式输出可能很久
+        proxy_read_timeout 1h;
+        proxy_send_timeout 1h;
+        proxy_buffering off;
+    }
+}

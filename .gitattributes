@@ -1,0 +1,4 @@
+# 所有文件统一 LF：脚本和配置都在 Linux 服务器上使用
+* text=auto eol=lf
+*.jpg binary
+*.png binary

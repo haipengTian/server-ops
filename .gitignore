@@ -1,0 +1,4 @@
+# 服务器上生成的文件不进仓库
+.env
+!.env.example
+data/

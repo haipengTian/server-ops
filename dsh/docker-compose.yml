@@ -1,0 +1,27 @@
+# DeepSeek Harness：只发布到本机回环地址，由主机 nginx 反代
+name: dsh
+
+services:
+  dsh:
+    build:
+      context: .
+      args:
+        DSH_VERSION: ${DSH_VERSION:?在 .env 中设置}
+    image: dsh-local:${DSH_VERSION}
+    restart: unless-stopped
+    init: true
+    environment:
+      - DSH_DOMAIN=${DSH_DOMAIN:?在 .env 中设置}
+    volumes:
+      # 配置、会话、模型凭据（.credentials.yaml）
+      - ${DSH_DATA_DIR:-/opt/dsh}/home:/data/home
+      # 智能体唯一能读写的工作目录
+      - ${DSH_DATA_DIR:-/opt/dsh}/workspace:/workspace
+    ports:
+      - "127.0.0.1:${DSH_HOST_PORT:-3080}:3080"
+    # 资源上限：避免智能体跑重任务时拖垮同机的博客等服务
+    mem_limit: ${DSH_MEM_LIMIT:-2g}
+    cpus: ${DSH_CPUS:-2}
+    pids_limit: 1024
+    security_opt:
+      - no-new-privileges:true
