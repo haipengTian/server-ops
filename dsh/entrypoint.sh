@@ -7,6 +7,12 @@ set -eu
 
 : "${DSH_DOMAIN:?需要在 .env 中设置 DSH_DOMAIN}"
 
+# dsh 拒绝加载别人可读的密钥文件；用别的工具编辑后权限常被改成 644，这里每次启动先收紧
+CRED="${DSH_HOME}/.credentials.yaml"
+if [ -f "$CRED" ] && ! chmod 600 "$CRED" 2>/dev/null; then
+  echo "dsh-entrypoint: 无法把 $CRED 改成 600（属主不是容器用户 uid 1000），请在服务器上运行 ./setup-model.sh" >&2
+fi
+
 socat TCP-LISTEN:3081,fork,reuseaddr TCP:127.0.0.1:3080 &
 
 # --trusted-host：浏览器用域名访问时，/api 的 Host 校验才会放行（否则全是 403）。

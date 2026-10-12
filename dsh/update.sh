@@ -6,7 +6,11 @@ cd "$(dirname "$0")"
 . ./lib.sh
 
 require_root
-git -C .. pull --ff-only || echo "（git pull 失败，继续用本地文件）"
+# 先拉代码，再用拉下来的新脚本重新执行一遍（否则 bash 会继续执行已经读进内存的旧脚本）
+if [ "${DSH_UPDATE_PULLED:-}" != 1 ]; then
+  git -C .. pull --ff-only || echo "（git pull 失败，继续用本地文件）"
+  DSH_UPDATE_PULLED=1 exec ./update.sh "$@"
+fi
 load_env
 fix_data_perms
 

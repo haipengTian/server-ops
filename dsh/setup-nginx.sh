@@ -79,5 +79,17 @@ apply
 
 sleep 2
 code="$(curl -s -o /dev/null -w '%{http_code}' "https://${DOMAIN}/" || true)"
-echo "✅ https://${DOMAIN}/ → HTTP ${code}（未登录返回 401 属正常）"
-echo "下一步：./login-url.sh"
+case "$code" in
+  2??|3??|401)
+    echo "✅ https://${DOMAIN}/ → HTTP ${code}（未登录返回 401 属正常）"
+    echo "下一步：./login-url.sh"
+    ;;
+  5??)
+    echo "⚠️  nginx 和证书已配置好，但 dsh 没有响应（HTTP ${code}）。看 docker compose ps 和 docker compose logs --tail 40 dsh" >&2
+    exit 1
+    ;;
+  *)
+    echo "⚠️  https://${DOMAIN}/ → HTTP ${code}，请检查 nginx：nginx -t && systemctl status nginx" >&2
+    exit 1
+    ;;
+esac
