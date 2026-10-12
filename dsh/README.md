@@ -74,6 +74,7 @@ dsh 是未经安全审计的开发者预览版，能执行模型生成的命令�
 | 启动报 `.credentials.yaml is readable beyond its owner` | 权限不是 600：`./setup-model.sh` 或 `./update.sh` 都会自动修正，然后 `docker compose restart dsh` |
 | 改了 `.credentials.yaml` 后容器起不来 | 格式错：`docker compose logs --tail 30 dsh` 看报错行，修好后 `docker compose restart dsh` |
 | 第一次打开提示「无法创建默认工作区」 | 正常：容器里没有「文档」目录可用。点「选择工作区」选 `/workspace` 即可，只需一次 |
+| `plugin.sh` 报 `timed out waiting for the writer lock` | 上次启动失败留下的写锁（容器里 PID 会复用，dsh 认不出它已失效）。`docker compose restart dsh`，启动时会自动清掉，再重试 |
 | 执行命令报 `SANDBOX_UNAVAILABLE` | 宿主机内核没开 Landlock 且容器里 bubblewrap 不可用，见下文「沙箱」 |
 | 证书签发失败 | 确认 `getent hosts dsh.thpvip.xyz` 指向本机，重跑 `./setup-nginx.sh` |
 
