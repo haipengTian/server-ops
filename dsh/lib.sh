@@ -15,6 +15,15 @@ load_env() {
   DSH_DATA_DIR="${DSH_DATA_DIR:-/opt/dsh}"
 }
 
+# 容器里以 node 用户（uid 1000）运行，数据目录要归它；.credentials.yaml 必须只有属主可读，
+# 否则 dsh 拒绝启动（用 root 或别的编辑器改过文件后常见）
+fix_data_perms() {
+  chown -R 1000:1000 "${DSH_DATA_DIR}/home"
+  if [ -f "${DSH_DATA_DIR}/home/.credentials.yaml" ]; then
+    chmod 600 "${DSH_DATA_DIR}/home/.credentials.yaml"
+  fi
+}
+
 require_root() {
   [ "$(id -u)" -eq 0 ] || { echo "请用 root 运行" >&2; exit 1; }
 }

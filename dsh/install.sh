@@ -19,6 +19,7 @@ fi
 mkdir -p "${DSH_DATA_DIR}/home" "${DSH_DATA_DIR}/workspace"
 chown -R 1000:1000 "${DSH_DATA_DIR}"
 chmod 750 "${DSH_DATA_DIR}"
+fix_data_perms
 
 echo "== 构建并启动 dsh ${DSH_VERSION}（第一次构建要下载依赖，几分钟）"
 docker compose up -d --build

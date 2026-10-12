@@ -1,17 +1,18 @@
 #!/bin/sh
-# dsh 的 --host 只接受一个具体 IP（不接受 0.0.0.0），所以绑定容器自己的网卡地址；
-# 宿主机只把它映射到 127.0.0.1，由主机 nginx 对外提供 HTTPS。
+# 0.2.0-rc.2 的网页服务只能监听 127.0.0.1（0.0.0.0 被命令行拒绝），容器外访问不到容器里的回环地址，
+# 所以 dsh 监听容器内的 127.0.0.1:3080，再由 socat 把容器网卡上的 3081 转发过去；
+# 宿主机只把 127.0.0.1:3080 映射到容器的 3081，由主机 nginx 对外提供 HTTPS。
+# 登录靠启动令牌和签名 cookie，不看来源地址，所以转发不会绕过登录。
 set -eu
 
 : "${DSH_DOMAIN:?需要在 .env 中设置 DSH_DOMAIN}"
 
-CONTAINER_IP="$(hostname -i | awk '{print $1}')"
+socat TCP-LISTEN:3081,fork,reuseaddr TCP:127.0.0.1:3080 &
 
 # --trusted-host：浏览器用域名访问时，/api 的 Host 校验才会放行（否则全是 403）。
-# 不传 --public-url：0.2.0-rc.2 没有这个参数，它也只影响打印出来的网址；
-# 打印的是容器内部地址，./login-url.sh 会换成 https://<域名>。
+# 不传 --public-url：rc.2 没有这个参数；打印的是 http://127.0.0.1:3080 开头的网址，./login-url.sh 会换成 https://<域名>。
 exec dsh --profile web \
   --no-open \
-  --host "$CONTAINER_IP" \
+  --host 127.0.0.1 \
   --port 3080 \
   --trusted-host "$DSH_DOMAIN"

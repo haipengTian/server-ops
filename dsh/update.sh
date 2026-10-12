@@ -8,6 +8,7 @@ cd "$(dirname "$0")"
 require_root
 git -C .. pull --ff-only || echo "（git pull 失败，继续用本地文件）"
 load_env
+fix_data_perms
 
 echo "== 用 DSH_VERSION=${DSH_VERSION} 重新构建并启动"
 docker compose up -d --build

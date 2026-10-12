@@ -3,7 +3,7 @@
 在这台服务器上以 Docker 运行 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的网页界面，对外地址 `https://dsh.thpvip.xyz`。
 
 ```
-浏览器 → 主机 nginx（HTTPS）→ 127.0.0.1:3080 → dsh 容器
+浏览器 → 主机 nginx（HTTPS）→ 127.0.0.1:3080 → 容器 3081（socat）→ 容器内 127.0.0.1:3080（dsh）
 ```
 
 ## 部署
@@ -34,11 +34,23 @@ cd /opt/server-ops/dsh
 
 Key 不能写进 `cordis.patch.yml`：dsh 的配置里只放引用名（`apiKeyEnv`），值只放在 `.credentials.yaml`。两个文件都只在服务器上，不进仓库。网页「设置 → 模型」改的也是这两个文件，两种方式可以混用。
 
+## 插件
+
+```bash
+./plugin.sh add dshmarket       # 安装（装完自动重启 dsh）
+./plugin.sh list                # 查看已装插件
+./plugin.sh remove dshmarket    # 卸载
+```
+
+`plugin.sh` 在容器里运行 `dsh plugin --profile web ...`（底层是 pnpm，镜像里已装好）。插件装在 `/opt/dsh/home/profiles/web`，升级、重建镜像都不受影响。
+
+插件和 dsh 同一个进程、同样权限运行，能读到工作目录和 `.credentials.yaml`。只装自己信任的包；`dshmarket` 是社区插件市场（非 DeepSeek 官方），通过它一键安装的插件同样如此。
+
 ## 升级
 
 在 `.env` 里改 `DSH_VERSION`（先看新版本的更新说明，预览版会有不兼容改动），然后 `./update.sh`。容器重启后登录网址会变，重新 `./login-url.sh`。
 
-当前用 npm 上的 `latest`（`0.2.0-rc.2`）。它没有 `--public-url` 参数，所以启动时打印的是容器内部地址，`./login-url.sh` 会换成 `https://<域名>`。升级后如果启动报 `unknown option`，先对照新版本的 `dsh --profile web --help` 调整 `entrypoint.sh`。
+当前用 npm 上的 `latest`（`0.2.0-rc.2`）。这个版本的网页服务只能监听 `127.0.0.1`（命令行不接受 `0.0.0.0`，也不接受具体 IP），所以容器里用 socat 把 3081 转发到 dsh 的 `127.0.0.1:3080`；dsh 的登录只看启动令牌和签名 cookie，不看请求来源，转发不影响登录。它也没有 `--public-url`，打印的是 `http://127.0.0.1:3080/?token=…`，`./login-url.sh` 会换成 `https://<域名>`。升级后如果启动报 `unknown option`，先对照新版本的 `dsh --profile web --help` 调整 `entrypoint.sh`。
 
 ## 安全边界
 
@@ -59,7 +71,9 @@ dsh 是未经安全审计的开发者预览版，能执行模型生成的命令�
 | 页面能开但会话不动 | nginx 的 WebSocket 升级没生效：`nginx -T \| grep connection_upgrade` |
 | 报 `MISSING_CREDENTIAL` | `apiKeyEnv` 的名字在 `.credentials.yaml` 的 `refs` 下没有值；运行 `./setup-model.sh` 检查 |
 | 中转地址和 Key 都对，但每个请求都被拒 | 提供商下加 `compat: {supportsDeveloperRole: false, maxTokensField: max_tokens}`（模板里已带） |
-| 改了 `.credentials.yaml` 后容器起不来 | 格式错或权限不是 600：`docker compose logs --tail 30 dsh`，修好后 `./setup-model.sh` |
+| 启动报 `.credentials.yaml is readable beyond its owner` | 权限不是 600：`./setup-model.sh` 或 `./update.sh` 都会自动修正，然后 `docker compose restart dsh` |
+| 改了 `.credentials.yaml` 后容器起不来 | 格式错：`docker compose logs --tail 30 dsh` 看报错行，修好后 `docker compose restart dsh` |
+| 第一次打开提示「无法创建默认工作区」 | 正常：容器里没有「文档」目录可用。点「选择工作区」选 `/workspace` 即可，只需一次 |
 | 执行命令报 `SANDBOX_UNAVAILABLE` | 宿主机内核没开 Landlock 且容器里 bubblewrap 不可用，见下文「沙箱」 |
 | 证书签发失败 | 确认 `getent hosts dsh.thpvip.xyz` 指向本机，重跑 `./setup-nginx.sh` |
 
