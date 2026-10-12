@@ -6,26 +6,39 @@
 浏览器 → 主机 nginx（HTTPS）→ 127.0.0.1:3080 → dsh 容器
 ```
 
-## 部署（3 条命令）
+## 部署
 
 ```bash
 git clone https://github.com/haipengTian/server-ops.git /opt/server-ops
 cd /opt/server-ops/dsh
 ./install.sh        # 构建镜像并启动，只监听 127.0.0.1
 ./setup-nginx.sh    # nginx 站点 + 证书（需要域名已解析到本机）
+./setup-model.sh    # 生成模型配置文件，按提示填中转地址、模型和 Key
 ./login-url.sh      # 打印登录网址，在自己的浏览器里打开
 ```
 
 都用 root 运行。第一次运行会从 `.env.example` 生成 `.env`，需要改域名、端口、数据目录或资源上限就编辑它（里面没有任何密钥）。
 
-登录后：
+登录后在模型选择器里选配置好的模型，再**添加工作区** `/workspace`（对应服务器上的 `/opt/dsh/workspace`）。要处理某个项目，就在这个目录里 `git clone` 一份。
 
-1. **设置 → 模型**：添加模型提供商并填 API Key。Key 只写不读，存在 `/opt/dsh/home/.credentials.yaml`，不要写进 `.env` 或仓库。
-2. **选择工作区**：添加 `/workspace`（对应服务器上的 `/opt/dsh/workspace`）。要处理某个项目，就在这个目录里 `git clone` 一份。
+## 模型配置
+
+模型提供商和 Key 都用文件配置，保存后 dsh 在下一次请求时自动读取，不用重启：
+
+| 文件（服务器上） | 写什么 | 模板 |
+|---|---|---|
+| `/opt/dsh/home/profiles/web/cordis.patch.yml` | 提供商 ID、协议、`baseURL`、模型列表、兼容开关 | [model/cordis.patch.example.yml](model/cordis.patch.example.yml) |
+| `/opt/dsh/home/.credentials.yaml` | API Key（`refs` 下，名字对应上面的 `apiKeyEnv`） | [model/credentials.example.yaml](model/credentials.example.yaml) |
+
+`./setup-model.sh` 在文件不存在时从模板生成，修正属主和权限（Key 文件必须是 600，否则 dsh 拒绝加载），并检查 Key 是否都填了；改完可以再跑一次做检查。它不会覆盖已有文件，也不会打印 Key。
+
+Key 不能写进 `cordis.patch.yml`：dsh 的配置里只放引用名（`apiKeyEnv`），值只放在 `.credentials.yaml`。两个文件都只在服务器上，不进仓库。网页「设置 → 模型」改的也是这两个文件，两种方式可以混用。
 
 ## 升级
 
 在 `.env` 里改 `DSH_VERSION`（先看新版本的更新说明，预览版会有不兼容改动），然后 `./update.sh`。容器重启后登录网址会变，重新 `./login-url.sh`。
+
+当前用 npm 上的 `latest`（`0.2.0-rc.2`）。它没有 `--public-url` 参数，所以启动时打印的是容器内部地址，`./login-url.sh` 会换成 `https://<域名>`。升级后如果启动报 `unknown option`，先对照新版本的 `dsh --profile web --help` 调整 `entrypoint.sh`。
 
 ## 安全边界
 
@@ -44,9 +57,18 @@ dsh 是未经安全审计的开发者预览版，能执行模型生成的命令�
 | `install.sh` 等待超时 | 看它打印的日志；`docker compose logs -f dsh` |
 | 浏览器里接口全是 403 | `.env` 的 `DSH_DOMAIN` 和访问的域名不一致，改好后 `docker compose up -d` |
 | 页面能开但会话不动 | nginx 的 WebSocket 升级没生效：`nginx -T \| grep connection_upgrade` |
+| 报 `MISSING_CREDENTIAL` | `apiKeyEnv` 的名字在 `.credentials.yaml` 的 `refs` 下没有值；运行 `./setup-model.sh` 检查 |
+| 中转地址和 Key 都对，但每个请求都被拒 | 提供商下加 `compat: {supportsDeveloperRole: false, maxTokensField: max_tokens}`（模板里已带） |
+| 改了 `.credentials.yaml` 后容器起不来 | 格式错或权限不是 600：`docker compose logs --tail 30 dsh`，修好后 `./setup-model.sh` |
 | 执行命令报 `SANDBOX_UNAVAILABLE` | 宿主机内核没开 Landlock 且容器里 bubblewrap 不可用，见下文「沙箱」 |
 | 证书签发失败 | 确认 `getent hosts dsh.thpvip.xyz` 指向本机，重跑 `./setup-nginx.sh` |
 
 ## 沙箱
 
-（待补充：根据服务器的内核检查结果确定）
+dsh 在 Linux 上先试 bubblewrap，不可用再用 Landlock；两者都不可用就拒绝执行命令，不会不加沙箱地执行。
+
+- 容器里 bubblewrap 多半起不来（它要创建命名空间，Docker 默认的 seccomp 和 `no-new-privileges` 会拦住）。这里**不**为了它放开 `--privileged` 或 `seccomp=unconfined`。
+- 这台服务器内核启用了 Landlock（`cat /sys/kernel/security/lsm` 里有 `landlock`），dsh 会退到 Landlock 执行命令。
+- 部署后验证一次：在会话里让它运行 `ls /`，能正常返回、没有 `SANDBOX_UNAVAILABLE` 即可。
+
+沙箱外面还有容器这一层：命令最多碰到挂进来的两个目录和容器自己的文件系统。

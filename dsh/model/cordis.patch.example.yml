@@ -1,0 +1,46 @@
+# dsh 模型提供商配置（模板）。setup-model.sh 会把它复制到
+#   /opt/dsh/home/profiles/web/cordis.patch.yml
+# 改完保存即可，dsh 在下一次请求时重新读取，不用重启。
+#
+# 这里只写「连哪里、用什么协议、有哪些模型」；API Key 不写在这里，
+# 而是写在 /opt/dsh/home/.credentials.yaml，用 apiKeyEnv 的名字对应起来。
+# 在网页「设置 → 模型」里改提供商也会改写这个文件。
+#
+# 注意：这个条目会整体替换 llm-pi-ai 的配置，多个提供商要写在同一个 providers 下面。
+# 全部字段见 https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.0-rc.2/docs/user/guide/providers.md
+
+- id: llm-pi-ai
+  config:
+    providers:
+      # 提供商 ID：小写字母和连字符，定下来以后不要改（会话记录和默认模型都引用它）
+      relay:
+        displayName: 我的中转
+        # 对应 .credentials.yaml 里 refs 下的名字
+        apiKeyEnv: RELAY_API_KEY
+        # 中转实际支持的协议，三选一：
+        #   openai-completions（OpenAI Chat Completions，最常见）
+        #   openai-responses（OpenAI Responses）
+        #   anthropic-messages（Anthropic Messages）
+        api: openai-completions
+        # 一般以 /v1 结尾，按中转文档填写
+        baseURL: https://relay.example.com/v1
+        # 大多数 OpenAI 兼容中转需要这两项，否则请求会被拒；
+        # api 改成 anthropic-messages 时删掉整个 compat 段
+        compat:
+          supportsDeveloperRole: false
+          maxTokensField: max_tokens
+        models:
+          # id 必须和中转的模型名一字不差；name 是界面上显示的名字
+          - id: your-model-id
+            name: 我的模型
+            contextWindow: 128000
+          # 推理模型可以声明思考档位，界面上才会出现 Effort 菜单：
+          # - id: your-reasoning-model-id
+          #   name: 推理模型
+          #   reasoningEfforts:
+          #     off:
+          #     high: high
+          #     max: max
+          # 中转后面是 DeepSeek V4 这类「默认就思考」的模型时，再加上：
+          #   compat:
+          #     thinkingFormat: deepseek

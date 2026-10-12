@@ -7,17 +7,21 @@ cd "$(dirname "$0")"
 
 load_env
 
-domain_re="${DSH_DOMAIN//./\\.}"
-url="$(docker compose logs --no-log-prefix dsh 2>/dev/null \
+# dsh 启动时打印一行「dsh web: <带令牌的网址> (LAN: ...)」。取最后一次启动的那一行里的第一个网址；
+# 它是容器内部地址，把「协议://主机:端口」换成对外域名，路径和令牌原样保留。
+line="$(docker compose logs --no-log-prefix dsh 2>/dev/null \
   | sed 's/\x1b\[[0-9;]*m//g' \
-  | grep -oE "https://${domain_re}/[^[:space:]\"']*" \
+  | grep -F 'dsh web: http' \
   | tail -1 || true)"
+raw="$(printf '%s' "$line" | grep -oE "https?://[^[:space:]\"'<>()]+" | head -1 || true)"
 
-if [ -z "$url" ]; then
+if [ -z "$raw" ]; then
   echo "没有在日志里找到登录网址。最近的日志：" >&2
   docker compose logs --tail 30 dsh >&2
   exit 1
 fi
+
+url="$(printf '%s' "$raw" | sed -E "s|^https?://[^/?#]+|https://${DSH_DOMAIN}|")"
 
 echo "在浏览器里打开下面的网址登录（只需打开一次，之后浏览器会记住会话）："
 echo
