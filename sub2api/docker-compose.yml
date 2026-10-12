@@ -1,0 +1,112 @@
+services:
+  sub2api:
+    image: ${SUB2API_IMAGE:?先运行 init.sh 设置个人镜像}
+    restart: unless-stopped
+    init: true
+    security_opt: [no-new-privileges:true]
+    ports:
+      - "127.0.0.1:${SUB2API_HOST_PORT:-8088}:8080"
+    volumes:
+      - ${SUB2API_DATA_DIR:-/opt/sub2api}/app:/app/data:Z
+    environment:
+      AUTO_SETUP: "true"
+      SERVER_HOST: 0.0.0.0
+      SERVER_PORT: "8080"
+      SERVER_MODE: release
+      RUN_MODE: standard
+      SERVER_FRONTEND_URL: https://${SUB2API_DOMAIN}
+      # nginx 覆盖客户端 IP 头；宿主机端口仅在回环地址开放。
+      # 容器看到的是 Docker 网关地址，此处按网关部署开启转发 IP 兼容模式。
+      SECURITY_TRUST_FORWARDED_IP_FOR_API_KEY_ACL: "true"
+      DATABASE_HOST: postgres
+      DATABASE_PORT: "5432"
+      DATABASE_USER: ${POSTGRES_USER}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?缺少数据库密码}
+      DATABASE_DBNAME: ${POSTGRES_DB}
+      DATABASE_SSLMODE: disable
+      DATABASE_MAX_OPEN_CONNS: "25"
+      DATABASE_MAX_IDLE_CONNS: "5"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?缺少 Redis 密码}
+      REDIS_POOL_SIZE: "128"
+      REDIS_MIN_IDLE_CONNS: "5"
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?填写管理员邮箱}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?缺少管理员密码}
+      JWT_SECRET: ${JWT_SECRET:?缺少 JWT 密钥}
+      TOTP_ENCRYPTION_KEY: ${TOTP_ENCRYPTION_KEY:?缺少 TOTP 密钥}
+      TZ: ${TZ:-Asia/Shanghai}
+    mem_limit: ${SUB2API_MEM_LIMIT:-1536m}
+    cpus: ${SUB2API_CPUS:-1.5}
+    pids_limit: 512
+    logging: &logging
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, wget, -q, -T, "5", -O, /dev/null, "http://127.0.0.1:8080/health"]
+      interval: 15s
+      timeout: 6s
+      retries: 20
+      start_period: 120s
+    networks: [backend]
+
+  postgres:
+    image: ${POSTGRES_IMAGE:-postgres:18-alpine}
+    restart: unless-stopped
+    security_opt: [no-new-privileges:true]
+    volumes:
+      - ${SUB2API_DATA_DIR:-/opt/sub2api}/postgres:/var/lib/postgresql/data:Z
+    environment:
+      PGDATA: /var/lib/postgresql/data
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?缺少数据库密码}
+      TZ: ${TZ:-Asia/Shanghai}
+    command: [postgres, -c, max_connections=60, -c, shared_buffers=128MB]
+    mem_limit: ${POSTGRES_MEM_LIMIT:-768m}
+    cpus: ${POSTGRES_CPUS:-1}
+    pids_limit: 256
+    logging: *logging
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" && psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -Atqc "SELECT 1" >/dev/null']
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 60s
+    networks: [backend]
+
+  redis:
+    image: ${REDIS_IMAGE:-redis:8-alpine}
+    restart: unless-stopped
+    security_opt: [no-new-privileges:true]
+    volumes:
+      - ${SUB2API_DATA_DIR:-/opt/sub2api}/redis:/data:Z
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?缺少 Redis 密码}
+      REDISCLI_AUTH: ${REDIS_PASSWORD}
+    # 在容器中生成配置，避免将密码放入 redis-server 的命令行参数。
+    command:
+      - sh
+      - -ec
+      - |
+        umask 077
+        printf 'appendonly yes\nappendfsync everysec\nmaxmemory 192mb\nmaxmemory-policy noeviction\nrequirepass %s\n' "$$REDIS_PASSWORD" > /tmp/redis.conf
+        chown redis:redis /tmp/redis.conf
+        exec /usr/local/bin/docker-entrypoint.sh redis-server /tmp/redis.conf
+    mem_limit: ${REDIS_MEM_LIMIT:-256m}
+    cpus: ${REDIS_CPUS:-0.5}
+    pids_limit: 128
+    logging: *logging
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [backend]
+
+networks:
+  backend:
+    driver: bridge

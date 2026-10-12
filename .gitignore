@@ -2,3 +2,9 @@
 .env
 !.env.example
 data/
+
+# Sub2API 服务器本地密钥、操作锁与临时配置
+sub2api/.env.*
+!sub2api/.env.example
+sub2api/.operation.lock
+sub2api/.transaction.*

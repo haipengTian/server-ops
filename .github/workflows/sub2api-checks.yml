@@ -1,0 +1,31 @@
+name: Sub2API deployment checks
+
+on:
+  push:
+    paths: ['sub2api/**', '.github/workflows/sub2api-checks.yml']
+  pull_request:
+    paths: ['sub2api/**', '.github/workflows/sub2api-checks.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Shell syntax and lint
+        run: |
+          find sub2api -name '*.sh' -print0 | xargs -0 -n1 bash -n
+          shellcheck -P SCRIPTDIR -x sub2api/*.sh sub2api/nginx/*.sh sub2api/tests/*.sh
+      - name: Isolated lifecycle and failure tests
+        run: bash sub2api/tests/run.sh
+      - name: Compose validation with synthetic secrets
+        run: |
+          cp sub2api/.env.example sub2api/.env
+          for key in POSTGRES_PASSWORD REDIS_PASSWORD JWT_SECRET TOTP_ENCRYPTION_KEY ADMIN_PASSWORD; do
+            sed -i "s|^$key=.*|$key=$(printf 'a%.0s' {1..64})|" sub2api/.env
+          done
+          sed -i 's/^ADMIN_EMAIL=.*/ADMIN_EMAIL=fixture@example.com/;s|^SUB2API_IMAGE=.*|SUB2API_IMAGE=ghcr.io/haipengtian/sub2api:0.2.15-custom.1|' sub2api/.env
+          docker compose --env-file sub2api/.env -f sub2api/docker-compose.yml config --quiet
+          rm -f sub2api/.env

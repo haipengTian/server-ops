@@ -14,4 +14,5 @@
 | 服务 | 域名 | 本机端口 | 部署文件 |
 |---|---|---|---|
 | DeepSeek Harness | dsh.thpvip.xyz | 3080 | [dsh/](dsh/) |
+| Sub2API 个人版本 | proxy.thpvip.xyz | 8088 | [sub2api/](sub2api/) |
 | 博客（anheyu-app 二开） | blog.thpvip.xyz | 8091 | [haipengTian/anheyu-app `deploy/`](https://github.com/haipengTian/anheyu-app/tree/custom/deploy) |
