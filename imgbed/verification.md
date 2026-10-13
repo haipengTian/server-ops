@@ -1,4 +1,4 @@
-# 本地验证记录
+# 验证记录
 
 验证日期：2026-10-13。产品基线：`0d219dd45f514265ba9cb17788059fd7a1b1240d`，版本 `2.7.7`。
 
@@ -19,9 +19,27 @@
 真实文件测试使用 Node 运行 `deploy/server/index.js` 的 Docker 适配路径，独立临时数据与合成凭据，
 并非实际 Docker 容器验证。该运行使用Windows；WSL执行的是脚本隔离测试。
 服务启动时显示重复 tags 列迁移被既有代码捕获的日志，未改变上游迁移行为。
-Docker Desktop daemon未运行，因此没有构建/运行镜像、验证镜像架构或线上GitHub Actions。
+本机 Docker Desktop daemon未运行；后续实际容器验收改在 GitHub Actions 执行。
 
-尚未执行：个人镜像发布、服务器安装、DNS/nginx/证书、真实R2/七牛/Telegram、较大文件与分块、
+## 云端容器与部署检查
+
+- 运维 [PR #1](https://github.com/haipengTian/server-ops/pull/1) 已合入，
+  [部署工作流](https://github.com/haipengTian/server-ops/actions/runs/38357536718) 成功，17个部署隔离场景通过。
+- 图床 [PR #1](https://github.com/haipengTian/CloudFlare-ImgBed/pull/1) 与
+  [PR #2](https://github.com/haipengTian/CloudFlare-ImgBed/pull/2) 已合入远端 main。
+- [手动 Docker 验收](https://github.com/haipengTian/CloudFlare-ImgBed/actions/runs/38363801044) 成功，
+  源提交 `ac48b6233679a62ec217eb73b19c89857a841547`；实际 amd64 镜像内有效认证回归和就绪检查通过，
+  上传、原图字节比对、重启持久化、鉴权与删除通过。手动运行不发布镜像。
+- 首次云端运行在重启检查失败；修复后重新查询宿主端口。成功运行实测从32768变为32769，
+  证实旧端口不能用于重启后的检查。修复另经 Bash、ShellCheck、YAML 和独立审查通过。
+
+- 首版 [tag 发布工作流](https://github.com/haipengTian/CloudFlare-ImgBed/actions/runs/38364801354) 成功，
+  再次运行 amd64 容器回归，发布 amd64/arm64 镜像。GHCR 显示 Public，匿名 registry 请求返回200。
+  `docker buildx imagetools inspect` 核实两种架构及 OCI index 摘要
+  `sha256:6a5f47668a72147c8f47ffbd9496cdf82a3877367e329c11291e5be71a201735`。
+  arm64 未运行容器，目标服务器需另行验收。
+
+尚未执行：服务器安装、DNS/nginx/证书、真实R2/七牛/Telegram、较大文件与分块、
 隔离备份恢复演练及生产验收。域名已确认，服务器操作由用户自行执行。
-本次基础保存于两仓库的独立维护分支；未合入main、未推送、未创建发布tag。
-命令和文档中的custom镜像标签是待发布示例，不是已存在镜像的证明。
+两仓库维护分支已推送并合入远端 main；发布记录在独立分支维护，用户已有 `.idea/` 未修改。
+tag `v2.7.7-custom.1` 指向实际验收提交；发布后文档单独维护，不改变该 tag。

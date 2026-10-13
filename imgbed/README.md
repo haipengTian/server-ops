@@ -8,18 +8,21 @@
 
 2026-10-13：本次部署基础基于实际获取的个人/官方共同基线
 `0d219dd45f514265ba9cb17788059fd7a1b1240d`，产品版本 `2.7.7`。
-本地维护与部署文件已准备；尚未发布个人镜像，也未连接服务器。
-下面 `2.7.7-custom.1` 是计划中的首版命名，须先确认 GitHub 发布检查成功和镜像真实存在。
+两仓库部署基础已合入远端 main，首版镜像已发布并确认公开可拉取：
+`ghcr.io/haipengtian/cloudflare-imgbed:2.7.7-custom.1`。
+OCI index 摘要：`sha256:6a5f47668a72147c8f47ffbd9496cdf82a3877367e329c11291e5be71a201735`。
+[发布检查](https://github.com/haipengTian/CloudFlare-ImgBed/actions/runs/38364801354) 成功，
+支持 linux/amd64、linux/arm64；实际容器回归在 amd64 运行，arm64 仅构建。
+尚未连接服务器，域名与真实外部存储尚待部署验收。
 产品侧的发布及上游融合入口：`CloudFlare-ImgBed/docs/custom/README.md`。
 
-## 1. 发布镜像并检查服务器
+## 1. 检查服务器
 
-先将图床维护分支审查、合入个人 main 并推送，在 GitHub Actions 的 Personal Docker image 中
-手动填入 `v2.7.7-custom.1` 做构建和文件测试。手动运行不发布；验证成功后在同一提交创建并推送该 tag，
-等待 GHCR 发布成功。镜像支持 linux/amd64、linux/arm64；工作流只运行 amd64 容器验收，arm64 需额外验收。
-首次 GHCR 包可能是私有的，公开包无需登录；私有包在服务器交互执行 `docker login ghcr.io -u haipengTian`。
+首版镜像无需登录 GHCR。后续版本仍需先手动容器验收，再在同一 main 所属提交发布 tag；
+发布成功后核实镜像摘要与可见性。完整证据见
+[首版发布记录](https://github.com/haipengTian/CloudFlare-ImgBed/blob/main/docs/custom/releases/v2.7.7-custom.1.md)。
 
-本运维分支合入并推送后，在服务器 root 会话执行：
+在服务器 root 会话执行：
 
 ```bash
 # 运维仓库不存在时：
@@ -45,7 +48,7 @@ nginx 模板使用 `http2 on`，需要 nginx >= 1.25.1。默认应用内存上�
 
 ```bash
 cd /opt/server-ops/imgbed
-# 先替换为实际已经成功发布的个人版本：
+# 首版已公开发布；安装会解析并固定镜像摘要：
 bash init.sh ghcr.io/haipengtian/cloudflare-imgbed:2.7.7-custom.1
 vi .env
 # 填写 CERTBOT_EMAIL；核对域名、资源上限、专用数据目录。
