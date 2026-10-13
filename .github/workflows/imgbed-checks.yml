@@ -1,0 +1,31 @@
+name: ImgBed deployment checks
+
+on:
+  push:
+    paths: ['imgbed/**', '.github/workflows/imgbed-checks.yml']
+  pull_request:
+    paths: ['imgbed/**', '.github/workflows/imgbed-checks.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Shell syntax and lint
+        run: |
+          find imgbed -name '*.sh' -print0 | xargs -0 -n1 bash -n
+          shellcheck -P SCRIPTDIR -x imgbed/*.sh imgbed/nginx/*.sh imgbed/tests/*.sh
+      - name: Isolated lifecycle and failure tests
+        run: bash imgbed/tests/run.sh
+      - name: Compose validation with synthetic secrets
+        run: |
+          cp imgbed/.env.example imgbed/.env
+          trap 'rm -f imgbed/.env' EXIT
+          for key in BASIC_PASS AUTH_CODE AI_CONFIG_SECRET; do
+            sed -i "s|^$key=.*|$key=$(printf 'a%.0s' {1..64})|" imgbed/.env
+          done
+          sed -i 's|^IMGBED_IMAGE=.*|IMGBED_IMAGE=ghcr.io/haipengtian/cloudflare-imgbed:2.7.7-custom.1|' imgbed/.env
+          docker compose --env-file imgbed/.env -f imgbed/docker-compose.yml config --quiet

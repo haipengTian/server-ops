@@ -1,0 +1,36 @@
+services:
+  imgbed:
+    image: ${IMGBED_IMAGE:?先运行 init.sh 设置个人镜像}
+    restart: unless-stopped
+    init: true
+    security_opt: [no-new-privileges:true]
+    ports:
+      - "127.0.0.1:${IMGBED_HOST_PORT:-7658}:8080"
+    volumes:
+      # SQLite、WAL、本地文件和分块暂存目录必须一起持久化。
+      - ${IMGBED_DATA_DIR:-/opt/imgbed}/app:/app/data:Z
+    environment:
+      PORT: "8080"
+      BASIC_USER: ${BASIC_USER:?缺少管理员用户名}
+      BASIC_PASS: ${BASIC_PASS:?缺少管理员密码}
+      AUTH_CODE: ${AUTH_CODE:?缺少上传访问密码}
+      AI_CONFIG_SECRET: ${AI_CONFIG_SECRET:?缺少 AI 凭据加密密钥}
+      TZ: ${TZ:-Asia/Shanghai}
+    mem_limit: ${IMGBED_MEM_LIMIT:-512m}
+    cpus: ${IMGBED_CPUS:-1}
+    pids_limit: 256
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+    healthcheck:
+      # 同时检查持久化认证配置、匿名访问和错误管理员密码。
+      test:
+        - CMD
+        - node
+        - --import
+        - ./deploy/server/register.mjs
+        - deploy/server/readiness.js
+      interval: 20s
+      timeout: 25s
+      retries: 6
+      start_period: 30s

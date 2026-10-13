@@ -15,4 +15,5 @@
 |---|---|---|---|
 | DeepSeek Harness | dsh.thpvip.xyz | 3080 | [dsh/](dsh/) |
 | Sub2API 个人版本 | proxy.thpvip.xyz | 8088 | [sub2api/](sub2api/) |
+| CloudFlare ImgBed 个人版本 | img.thpvip.xyz | 7658 | [imgbed/](imgbed/) |
 | 博客（anheyu-app 二开） | blog.thpvip.xyz | 8091 | [haipengTian/anheyu-app `deploy/`](https://github.com/haipengTian/anheyu-app/tree/custom/deploy) |
