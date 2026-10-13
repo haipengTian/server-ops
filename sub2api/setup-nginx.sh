@@ -6,7 +6,7 @@ source "$(dirname -- "$0")/lib.sh"
 require_root
 lock_operation
 load_env
-require_commands nginx certbot curl getent systemctl
+require_commands nginx certbot curl getent systemctl sleep
 # Enforcing 下主机 nginx 需要获准连接应用的回环端口。
 if command -v getenforce >/dev/null && [[ $(getenforce) == Enforcing ]]; then
   require_commands getsebool
@@ -58,8 +58,21 @@ chmod 644 "$conf"
 apply
 mkdir -p /etc/letsencrypt/renewal-hooks/deploy
 install -m 755 "$OPS_DIR/nginx/reload-after-renew.sh" /etc/letsencrypt/renewal-hooks/deploy/sub2api-nginx-reload
-# 本机验证该站点，避免经过可能配置错误的外部 CDN 或其他服务器。
-curl --fail --silent --show-error --connect-timeout 5 --max-time 20 \
-  --resolve "$SUB2API_DOMAIN:443:127.0.0.1" "https://$SUB2API_DOMAIN/health" >/dev/null
+# reload 返回时新 worker 可能尚未接管；用实际 HTTPS 等待，保留完整证书校验。
+# --noproxy 确保本机检查不会被服务器上的代理环境变量转发。
+wait_https() {
+  local attempt
+  for attempt in {1..10}; do
+    if curl --fail --silent --show-error --noproxy '*' --connect-timeout 2 --max-time 5 \
+      --resolve "$SUB2API_DOMAIN:443:127.0.0.1" "https://$SUB2API_DOMAIN/health" \
+      > /dev/null 2> "$saved/https-error"; then
+      return 0
+    fi
+    [[ $attempt == 10 ]] || sleep 1
+  done
+  cat "$saved/https-error" >&2
+  die 'nginx 重载后 HTTPS 校验仍失败，请核对证书域名、站点监听和 nginx 错误日志'
+}
+wait_https
 completed=true
 printf 'HTTPS 和 nginx 已就绪：https://%s\n' "$SUB2API_DOMAIN"

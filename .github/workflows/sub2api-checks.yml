@@ -19,7 +19,9 @@ jobs:
           find sub2api -name '*.sh' -print0 | xargs -0 -n1 bash -n
           shellcheck -P SCRIPTDIR -x sub2api/*.sh sub2api/nginx/*.sh sub2api/tests/*.sh
       - name: Isolated lifecycle and failure tests
-        run: bash sub2api/tests/run.sh
+        run: |
+          bash sub2api/tests/run.sh
+          bash sub2api/tests/nginx.sh
       - name: Compose validation with synthetic secrets
         run: |
           cp sub2api/.env.example sub2api/.env

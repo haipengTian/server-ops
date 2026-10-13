@@ -110,6 +110,8 @@ curl --fail https://proxy.thpvip.xyz/health
 ```
 
 脚本安装独立站点与 WebSocket map，申请 webroot 证书，检查配置后重载 nginx。
+重载后最多进行 10 次本机 HTTPS 检查以等待新 worker 接管，始终验证证书并绕过代理环境变量；
+持续证书错误仍会失败并恢复配置，不会通过关闭证书校验继续部署。
 失败时恢复本次修改前的这两个 nginx 文件。续期 hook 在签发成功后检查并重载 nginx。
 需要确保系统已有 certbot 的定时续期任务；不同发行版 timer 名称不同，不能仅凭安装 hook 认定自动续期已启用。
 模板允许流式响应、WebSocket、长请求与 128 MiB 上传，覆盖来访请求中的客户端 IP 头。
