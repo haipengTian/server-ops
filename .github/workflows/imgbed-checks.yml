@@ -19,7 +19,9 @@ jobs:
           find imgbed -name '*.sh' -print0 | xargs -0 -n1 bash -n
           shellcheck -P SCRIPTDIR -x imgbed/*.sh imgbed/nginx/*.sh imgbed/tests/*.sh
       - name: Isolated lifecycle and failure tests
-        run: bash imgbed/tests/run.sh
+        run: |
+          bash imgbed/tests/run.sh
+          bash imgbed/tests/nginx.sh
       - name: Compose validation with synthetic secrets
         run: |
           cp imgbed/.env.example imgbed/.env

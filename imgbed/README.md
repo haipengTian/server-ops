@@ -94,6 +94,8 @@ curl --fail https://img.thpvip.xyz/
 ```
 
 setup-nginx 在发布站点前验证本地认证，使用 webroot 申请证书，检查 nginx 后重载。
+重载后最多10次本机 HTTPS 检查等待 worker 切换，始终验证证书且绕过代理环境变量；
+持续证书错误或鉴权错误仍会失败并恢复配置，不会通过关闭证书校验继续部署。
 失败会恢复本次修改前的站点与 map 文件；已有证书及续期 hook 保留。续期 hook 不等于自动续期 timer，
 需核实系统已有 certbot 定时任务。模板允许 128 MiB 请求，适配 WebDAV；更大文件需确认前端分块行为。
 当前 IP 头按直接访问 nginx 配置；启用 Cloudflare CDN 后另行配置可信代理来源。

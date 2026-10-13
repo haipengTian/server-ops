@@ -6,7 +6,7 @@ source "$(dirname -- "$0")/lib.sh"
 require_root
 lock_operation
 load_env
-require_commands nginx certbot curl getent systemctl
+require_commands nginx certbot curl getent systemctl sleep
 [[ $CERTBOT_EMAIL =~ ^[^@]+@[^@]+\.[^@]+$ ]] || die '请填写 .env 中的 CERTBOT_EMAIL'
 # 已有数据库设置优先于环境变量，必须检查实际接口鉴权。
 verify_http
@@ -61,12 +61,25 @@ chmod 644 "$conf"
 apply
 mkdir -p /etc/letsencrypt/renewal-hooks/deploy
 install -m 755 "$OPS_DIR/nginx/reload-after-renew.sh" /etc/letsencrypt/renewal-hooks/deploy/imgbed-nginx-reload
-# 本机验证该站点，避免经过可能配置错误的外部 CDN 或其他服务器。
-curl --fail --silent --show-error --connect-timeout 5 --max-time 20 \
-  --resolve "$IMGBED_DOMAIN:443:127.0.0.1" "https://$IMGBED_DOMAIN/" >/dev/null
+# reload 返回时新 worker 可能尚未接管；用实际 HTTPS 等待，保留完整证书校验。
+# --noproxy 确保本机检查不会被服务器上的代理环境变量转发。
+wait_https() {
+  local attempt
+  for attempt in {1..10}; do
+    if curl --fail --silent --show-error --noproxy '*' --connect-timeout 2 --max-time 5 \
+      --resolve "$IMGBED_DOMAIN:443:127.0.0.1" "https://$IMGBED_DOMAIN/" \
+      > /dev/null 2> "$saved/https-error"; then
+      return 0
+    fi
+    [[ $attempt == 10 ]] || sleep 1
+  done
+  cat "$saved/https-error" >&2
+  die 'nginx 重载后 HTTPS 校验仍失败，请核对证书域名、站点监听和 nginx 错误日志'
+}
+wait_https
 for path in /api/manage/list /upload; do
   method=GET; [[ $path != /upload ]] || method=POST
-  code=$(curl --silent --show-error --connect-timeout 5 --max-time 20 -o /dev/null -w '%{http_code}' \
+  code=$(curl --silent --show-error --noproxy '*' --connect-timeout 5 --max-time 20 -o /dev/null -w '%{http_code}' \
     -X "$method" --resolve "$IMGBED_DOMAIN:443:127.0.0.1" "https://$IMGBED_DOMAIN$path")
   [[ $code == 401 ]] || die "HTTPS 认证检查失败：$path 返回 $code"
 done
