@@ -8,3 +8,8 @@ sub2api/.env.*
 !sub2api/.env.example
 sub2api/.operation.lock
 sub2api/.transaction.*
+
+imgbed/.env.*
+!imgbed/.env.example
+imgbed/.operation.lock
+imgbed/.transaction.*
