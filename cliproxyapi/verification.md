@@ -52,6 +52,16 @@ PASS: management writes and bcrypt key survive container recreation
 
 本机直连查询 `cpa.thpvip.xyz` 的 A 记录为 `216.158.79.63`；HTTPS `/healthz` 返回 `{"status":"ok"}`，GET `/management.html` 返回 200，响应头 `Via: 1.1 Caddy`。用户已确认这是另一台服务器，DNS 后续由用户变更。本轮准备当前 xiguapier 服务器的新部署，先本机/隧道验收，再切换 DNS 并申请证书；不修改原服务器。原账号与配置不会因 DNS 切换自动迁移。
 
+以上是部署前的域名记录。用户随后确认新服务器安装成功、DNS 已切换；本机实际访问 `142.248.83.14` 的 nginx HTTPS，证书校验成功、GET 管理页面 200 且 SHA 与正式产物一致、健康接口 200、匿名 `/v1/models` 401。管理登录后用户提供的日志显示 Antigravity 请求进入上游，但 Google 返回地区条件错误；用户确认服务器出口问题。
+
+## 可选出口代理验证
+
+新增独立 sing-box v1.14.3 代理容器，镜像固定为 `sha256:80c639ba467885b28511fb7c980565c2d30a8752f778e7bc8abdbc91fbfd95ec`，只连接现有 backend 网络，不发布宿主机端口。节点由用户在服务器隐藏输入，测试未使用实际节点或凭证。
+
+转换器成功场景、13 个错误输入和 Compose 项目隔离回归均通过；错误不输出链接或 UUID。真实 Compose 检查先复现 `-p` 覆盖 `COMPOSE_PROJECT_NAME` 导致外部网络名错误，再使用独立网络变量修复。实际镜像断网 `sing-box check` 接受合成配置；非 root、只读代理容器能通过内网别名与应用镜像容器完成 SOCKS5 握手，PortBindings 为空。实际复现普通 `up` 保留已有进程，再核验 `--force-recreate` 更换容器并恢复 SOCKS5 服务。测试容器和网络已清理。
+
+Linux Bash/ShellCheck、既有生命周期 20 项与 nginx 5 项通过。以上证明配置格式、内网隔离与 SOCKS5 监听，未验证真实 Reality 节点的 TLS 握手、远程出口、Google 资格或真实模型调用；这些须由用户在服务器执行 `egress/status.sh` 和同账号模型测试。
+
 ## 正式发布结果
 
 [v8.0.20-custom.1](https://github.com/haipengTian/CLIProxyAPI/releases/tag/v8.0.20-custom.1) 已发布。[发布运行 38535163176](https://github.com/haipengTian/CLIProxyAPI/actions/runs/38535163176) 的完整重跑 completed/success，verify 和 publish 均成功；发布的是通过 smoke 的同一镜像。

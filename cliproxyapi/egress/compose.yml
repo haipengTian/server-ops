@@ -1,0 +1,26 @@
+services:
+  egress:
+    # sing-box v1.14.3, fixed release manifest; no proxy port is published.
+    image: ghcr.io/sagernet/sing-box@sha256:80c639ba467885b28511fb7c980565c2d30a8752f778e7bc8abdbc91fbfd95ec
+    command: [run, -c, /etc/sing-box/config.json]
+    user: "10001:10001"
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 192m
+    cpus: 0.5
+    pids_limit: 128
+    volumes:
+      - ${CLIPROXY_DATA_DIR:?}/secrets/egress:/etc/sing-box:ro,Z
+    logging:
+      driver: json-file
+      options: {max-size: "5m", max-file: "2"}
+    networks:
+      backend:
+        aliases: [cliproxyapi-egress]
+networks:
+  backend:
+    external: true
+    # Compose's -p option also overrides its COMPOSE_PROJECT_NAME interpolation.
+    name: ${EGRESS_NETWORK_NAME:?}

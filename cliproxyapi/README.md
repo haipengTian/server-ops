@@ -48,6 +48,10 @@ ssh -L 8317:127.0.0.1:8317 root@服务器IP
 
 然后访问本机 `http://127.0.0.1:8317/management.html`。公网最终使用 HTTPS 域名。
 
+## 可选的上游出口代理
+
+当 Antigravity 因服务器出口地区拒绝调用时，可用 [egress/README.md](egress/README.md) 中的独立 sing-box 容器，把服务器本地输入的 VLESS Reality 链接转换为 Docker 内网 SOCKS5 代理。它不发布宿主机端口，不修改默认安装和应用配置；先运行 `bash egress/setup.sh`、`bash egress/status.sh` 检查出口，再为目标认证文件配置 `socks5://cliproxyapi-egress:1080` 并验证真实调用。Google 是否接受该出口仍需实际测试。
+
 ## 数据与备份
 
 `/opt/cliproxyapi/{config,auths,logs,plugins}` 挂载到容器，归 UID/GID 10001，目录权限 700。配置文件 600，可由后台写入。`WRITABLE_PATH=/CLIProxyAPI` 确保应用及错误日志统一进入 logs；单文件前端留在镜像 static 中，不用宿主机卷覆盖。
