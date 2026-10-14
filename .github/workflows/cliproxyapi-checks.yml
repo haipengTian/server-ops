@@ -1,0 +1,27 @@
+name: CLIProxyAPI deployment checks
+on:
+  push:
+    paths: ['cliproxyapi/**', '.github/workflows/cliproxyapi-checks.yml']
+  pull_request:
+    paths: ['cliproxyapi/**', '.github/workflows/cliproxyapi-checks.yml']
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Shell syntax and lint
+        run: |
+          find cliproxyapi -name '*.sh' -print0 | xargs -0 -n1 bash -n
+          shellcheck -P SCRIPTDIR -x cliproxyapi/*.sh cliproxyapi/nginx/*.sh cliproxyapi/tests/*.sh
+      - name: Lifecycle and nginx failure recovery
+        run: |
+          bash cliproxyapi/tests/run.sh
+          bash cliproxyapi/tests/nginx.sh
+      - name: Compose validation with a synthetic image
+        run: |
+          cp cliproxyapi/.env.example cliproxyapi/.env
+          trap 'rm -f cliproxyapi/.env' EXIT
+          sed -i 's|^CLIPROXY_IMAGE=.*|CLIPROXY_IMAGE=ghcr.io/haipengtian/cliproxyapi:8.0.20-custom.1|' cliproxyapi/.env
+          docker compose --env-file cliproxyapi/.env -f cliproxyapi/docker-compose.yml config --quiet
