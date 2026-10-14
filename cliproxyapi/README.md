@@ -2,7 +2,7 @@
 
 部署 `haipengTian/CLIProxyAPI` 与 `haipengTian/Cli-Proxy-API-Management-Center` 的配套镜像。管理前端包含在容器中，页面与源码提交、校验和随 Release 记录，自动更新关闭。无需额外数据库，插件默认关闭。
 
-当前是本地部署流程交付，正式 GHCR 版本尚未发布。以下命令必须在对应 Release 的 Actions 全部成功、镜像可拉取、部署文件已发布后执行；`8.0.20-custom.1` 是拟定首版标签，不代表镜像已存在。发布准备状态见 [verification.md](verification.md)。
+首版 [v8.0.20-custom.1](https://github.com/haipengTian/CLIProxyAPI/releases/tag/v8.0.20-custom.1) 已发布，[正式发布检查](https://github.com/haipengTian/CLIProxyAPI/actions/runs/38535163176) 全部成功，linux/amd64 镜像已实际匿名拉取。固定摘要为 `sha256:1291e33624ac9c7f16e8dec44b68424adeb6aad6c707033581988888c8256674`。服务器安装尚未执行，验证证据见 [verification.md](verification.md)。
 
 ## 首次安装
 
@@ -14,7 +14,6 @@ bash init.sh ghcr.io/haipengtian/cliproxyapi:8.0.20-custom.1
 vi .env
 bash install.sh
 bash status.sh
-bash setup-nginx.sh
 ```
 
 `.env` 中填写证书邮箱 `CERTBOT_EMAIL`，默认域名是 `cpa.thpvip.xyz`，宿主机端口为 `127.0.0.1:8317`。仅接受字面值 `KEY=value`，不加引号或空格。初次安装将版本标签解析为固定 digest；之后用 `update.sh` 升级。
@@ -23,6 +22,12 @@ bash setup-nginx.sh
 
 当前域名对应另一台服务器的既有服务（用户已确认），DNS 稍后由用户切换。此流程部署当前 xiguapier 服务器；切换 DNS 后再执行 `setup-nginx.sh`，证书 webroot 验证需到达本机。新服务先通过本机或 SSH 隧道检查，DNS 切换不代表原服务器的 OAuth/config 数据自动迁移。
 
+本机与隧道验收完成、DNS 已切换到新服务器后，再配置 HTTPS：
+
+```bash
+bash setup-nginx.sh
+```
+
 初始化前检查 Docker 现有网络，确保 `172.30.83.0/24` 不与已有网络或主机路由重叠；如需变更，同时修改 `CLIPROXY_SUBNET` 和 `CLIPROXY_GATEWAY` 后初始化。初始化会将 gateway 写入 `server.trusted-proxies`，后续改网络也必须同步改配置。首次申请证书建议使用直连源站 DNS。当前 nginx 模板要求 >=1.25.1。SELinux Enforcing 时，按脚本提示由用户启用 `httpd_can_network_connect`；四个专用挂载使用 `:Z`。
 
 ## 访问与密钥
@@ -30,6 +35,8 @@ bash setup-nginx.sh
 管理页面：<https://cpa.thpvip.xyz/management.html>；OpenAI 兼容 API 地址：`https://cpa.thpvip.xyz/v1`。
 
 初始管理密钥和客户端 Key 由服务器生成，保存在 `/opt/cliproxyapi/secrets/initial-keys`，仅 root 可读。用户在服务器本地查看，并分别用于管理登录和 API 客户端，勿贴入聊天或提交 Git。应用会把配置中的管理密钥写为 bcrypt；`initial-keys` 是初始记录，后台轮换后不会自动更新。
+
+首次执行 `init.sh` 即生成这两个值，无需另行注册管理员。`MANAGEMENT_KEY` 就是管理页面的登录密码，`CLIENT_API_KEY` 用于调用 `/v1`；两者不能混用。`.env` 填写部署参数，OAuth 与上游模型 Key 在登录后台后接入。需要自定义初始密码时，在首次 `install.sh` 前于服务器本地编辑 `/opt/cliproxyapi/config/config.yaml` 的 `management.secret-key`；同时自行更新初始记录，避免保留过期密码。后续重复初始化不会重置已有密码。
 
 管理界面使用同一 HTTPS 地址登录。通过后台接入 OAuth 或上游 API Key，凭证仅留在服务器。管理授权失败会累计计数，五次触发临时封禁；安装、状态和健康探测不发送匿名管理请求。自动检查验证管理配置安全开关、真实页面 SHA、匿名客户端拒绝与有效客户端认证；管理登录及实际模型调用仍需用户验收。
 
