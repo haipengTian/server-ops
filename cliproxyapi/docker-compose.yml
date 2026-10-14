@@ -1,0 +1,39 @@
+services:
+  cliproxyapi:
+    image: ${CLIPROXY_IMAGE:?先运行 init.sh 设置个人镜像}
+    restart: unless-stopped
+    init: true
+    user: "10001:10001"
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    ports:
+      - "127.0.0.1:${CLIPROXY_HOST_PORT:-8317}:8317"
+    volumes:
+      - ${CLIPROXY_DATA_DIR:-/opt/cliproxyapi}/config:/CLIProxyAPI/config:Z
+      - ${CLIPROXY_DATA_DIR:-/opt/cliproxyapi}/auths:/CLIProxyAPI/auths:Z
+      - ${CLIPROXY_DATA_DIR:-/opt/cliproxyapi}/logs:/CLIProxyAPI/logs:Z
+      - ${CLIPROXY_DATA_DIR:-/opt/cliproxyapi}/plugins:/CLIProxyAPI/plugins:Z
+    environment:
+      MANAGEMENT_STATIC_PATH: /CLIProxyAPI/static
+      WRITABLE_PATH: /CLIProxyAPI
+      TZ: ${TZ:-Asia/Shanghai}
+    mem_limit: ${CLIPROXY_MEM_LIMIT:-768m}
+    cpus: ${CLIPROXY_CPUS:-1}
+    pids_limit: 256
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+    # Authenticated deployment checks run once from install/update, not every health probe.
+    healthcheck:
+      test: [CMD, curl, --fail, --silent, --noproxy, "*", "http://127.0.0.1:8317/healthz"]
+      interval: 20s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    networks: [backend]
+networks:
+  backend:
+    ipam:
+      config:
+        - subnet: ${CLIPROXY_SUBNET:-172.30.83.0/24}
+          gateway: ${CLIPROXY_GATEWAY:-172.30.83.1}

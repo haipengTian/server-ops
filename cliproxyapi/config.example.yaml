@@ -1,0 +1,26 @@
+config-version: 8
+server:
+  host: "0.0.0.0"
+  port: 8317
+  trusted-proxies: ["__TRUSTED_PROXY__"]
+management:
+  allow-remote: true
+  secret-key: "__MANAGEMENT_KEY__"
+  disable-control-panel: false
+  disable-auto-update-panel: true
+  panel-github-repository: "https://github.com/haipengTian/Cli-Proxy-API-Management-Center"
+access:
+  api-keys: ["__CLIENT_API_KEY__"]
+oauth:
+  auth-dir: "/CLIProxyAPI/auths"
+routing:
+  strategy: "round-robin"
+observability:
+  logs:
+    logging-to-file: true
+    logs-max-total-size-mb: 100
+    error-logs-max-files: 10
+    request-log: false
+plugins:
+  enabled: false
+  dir: "/CLIProxyAPI/plugins"

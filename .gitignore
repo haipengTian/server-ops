@@ -13,3 +13,8 @@ imgbed/.env.*
 !imgbed/.env.example
 imgbed/.operation.lock
 imgbed/.transaction.*
+
+cliproxyapi/.env.*
+!cliproxyapi/.env.example
+cliproxyapi/.operation.lock
+cliproxyapi/.transaction.*
