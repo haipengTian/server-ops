@@ -18,3 +18,4 @@ cliproxyapi/.env.*
 !cliproxyapi/.env.example
 cliproxyapi/.operation.lock
 cliproxyapi/.transaction.*
+cliproxyapi/**/__pycache__/

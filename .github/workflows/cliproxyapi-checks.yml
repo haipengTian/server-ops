@@ -19,6 +19,15 @@ jobs:
         run: |
           bash cliproxyapi/tests/run.sh
           bash cliproxyapi/tests/nginx.sh
+          python3 -m unittest discover -s cliproxyapi/tests -p 'test_*.py' -v
+      - name: Optional egress syntax and isolation
+        run: |
+          bash -n cliproxyapi/egress/setup.sh
+          bash -n cliproxyapi/egress/status.sh
+          shellcheck -P SCRIPTDIR -x cliproxyapi/egress/*.sh
+          export CLIPROXY_DATA_DIR=/opt/cliproxyapi COMPOSE_PROJECT_NAME=cliproxyapi-custom
+          export EGRESS_NETWORK_NAME=cliproxyapi-custom_backend
+          docker compose -f cliproxyapi/egress/compose.yml config --quiet
       - name: Compose validation with a synthetic image
         run: |
           cp cliproxyapi/.env.example cliproxyapi/.env
