@@ -5,17 +5,17 @@
 ## 目标与交付边界
 
 在现有服务器部署个人 fork 的 CLIProxyAPI 与管理前端，沿用 Docker + 主机 nginx + certbot。
-部署脚本与个人发布流程已在本地实现，验证记录见 `cliproxyapi/verification.md`；正式 GHCR 镜像尚未发布，服务器安装尚未执行。
+部署脚本与个人发布流程已实现，[v8.0.20-custom.1](https://github.com/haipengTian/CLIProxyAPI/releases/tag/v8.0.20-custom.1) 正式发布检查成功，镜像已实际匿名拉取；摘要与页面校验见 `cliproxyapi/verification.md`。服务器安装尚未执行。
 用户已提供服务器环境：x86_64、nginx 1.26.3、Compose 5.6.0、可用内存 4.7 GiB、磁盘空闲 44 GiB、8317 空闲。本机 DNS 查询得到 `cpa.thpvip.xyz` → `216.158.79.63`，仍须核对源站地址、80/443 和上游出网。
 当前该域名的健康与管理页面已响应，经过 Caddy；用户确认它对应另一台服务器，DNS 后续自行切换。本轮先部署 xiguapier 并本机验收，DNS 切换后再申请证书与验证域名访问。
 
 ## 已核实的代码基线
 
-| 仓库 | 当前本地提交 | 职责 |
+| 仓库 | 配套提交 | 职责 |
 | --- | --- | --- |
-| `haipengTian/CLIProxyAPI` | `0d18d3b365be000eeaee7de4615f9da596b2059d` | 后端基线；部署改动另在 codex 分支 |
+| `haipengTian/CLIProxyAPI` | `a1b5b91258484a7e3bf194ebb31b06dc4a8c61f8` | 已合入 main 的后端与部署版本；开发基线 `0d18d3b3` |
 | `haipengTian/Cli-Proxy-API-Management-Center` | `431ae6ce4d73fde9fa97d80cd20df0400dff891c` | 前端源码、单文件构建及测试兼容修复 |
-| `haipengTian/server-ops` | `500a58c` | 部署、HTTPS、备份、升级和回滚 |
+| `haipengTian/server-ops` | `dda59b3fb705be25c6db09df2959414a9b584da8` | 已合入 main 的部署、HTTPS、备份、升级和回滚；发布状态文档另行更新 |
 
 后端是 Go 1.26 的 v8 模块；当前 main 位于本地 `v8.0.20` 标签之后，不能把当前提交当作该标签的原始内容。
 前端使用 Bun 1.3.14，构建为 `dist/index.html`；发布产物名为 `management.html`，只使用 v8 管理接口。
@@ -51,12 +51,12 @@ Docker：CLIProxyAPI :8317 + 配套 management.html
 6. 后端个人工作流先验证，再发布 `ghcr.io/haipengtian/cliproxyapi:<固定个人版本>`；安装时解析并固定镜像摘要。
 7. Release 记录两个源码 SHA、HTML 校验和、镜像摘要与实际验证过的架构；保留两项目许可证。
 
-继承的后端 `release.yaml` 和 `docker-image.yml` 已在本地加入官方仓库条件；新增个人 GHCR 工作流验证后发布同一测试镜像。发布前仍需推送前端 pin、审核合入后端与运维改动，并确认检查成功。
+继承的后端发布与 PR 管理规则已限制到官方仓库；新增个人 GHCR 工作流验证后发布同一测试镜像。前端固定提交已推送，三个仓库已审核合入 main；后端最终提交的两次云端验收成功，正式标签完整发布检查和实际匿名拉取也已通过。
 个人 GHCR 发布采用 GitHub Actions 的 `GITHUB_TOKEN` 与 `packages: write`，无需用户提交长期 Token。
-首版发布后确认镜像公开可匿名拉取；私有镜像的登录凭据只由用户在服务器本地配置。
+首版已确认镜像可匿名拉取，无需在服务器配置 GHCR 登录凭据。
 
 注意：关闭前端自动更新并不禁止“页面缺失时首次下载”。发布验收必须在阻断外网的条件下确认镜像内的页面存在、可访问且校验和正确。
-源码已经支持固定页面路径，此方案预计不需要修改后端业务代码。
+源码已支持固定页面路径。发布检查另外发现配置与账号热更新竞争，已修复共用重载/账号观察路径并补充回归测试；未修改翻译器产品逻辑或废弃管理接口实现。验证范围见 `cliproxyapi/verification.md`。
 
 ## 持久化与初始配置
 
@@ -89,7 +89,7 @@ nginx 保留流式响应和 WebSocket：关闭代理缓冲、设置升级头与�
 覆盖客户端提交的 IP 头；后端只信任实际的专用 Docker 代理来源，不设置任意来源可信。
 证书使用现有 certbot webroot；修改站点后先验证语法再重载，并等待新 worker 的 HTTPS 检查通过。
 
-现有模板使用 `http2 on`，要求 nginx >= 1.25.1。历史记录曾出现 nginx 1.20.1，当前状态未核实。
+现有模板使用 `http2 on`，要求 nginx >= 1.25.1。用户已提供当前服务器 nginx 1.26.3，满足此语法要求。
 新服务模板应兼容实际服务器版本；不能为了新增站点直接升级共享 nginx 或覆盖其他服务配置。
 SELinux Enforcing 时核实 `httpd_can_network_connect`；外部入口只需允许 80/443，不开放 8317。
 
