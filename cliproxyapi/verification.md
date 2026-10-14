@@ -44,11 +44,11 @@ PASS: management writes and bcrypt key survive container recreation
 
 用户提供：x86_64、nginx 1.26.3、Compose 5.6.0、内存可用 4.7 GiB、磁盘空闲 44 GiB、8317 空闲。拟使用一个 768 MiB / 1 CPU 容器与 nginx HTTPS。
 
-本机直连查询 `cpa.thpvip.xyz` 的 A 记录为 `216.158.79.63`；HTTPS `/healthz` 返回 `{"status":"ok"}`，GET `/management.html` 返回 200，响应头 `Via: 1.1 Caddy`。这表明域名已有服务，不能当作首次空白站点直接覆盖；须由用户确认该服务属于谁、是否在本次服务器、是否需要替换，以及现有 OAuth/config 数据是否迁移。本轮尚未作更改。
+本机直连查询 `cpa.thpvip.xyz` 的 A 记录为 `216.158.79.63`；HTTPS `/healthz` 返回 `{"status":"ok"}`，GET `/management.html` 返回 200，响应头 `Via: 1.1 Caddy`。用户已确认这是另一台服务器，DNS 后续由用户变更。本轮准备当前 xiguapier 服务器的新部署，先本机/隧道验收，再切换 DNS 并申请证书；不修改原服务器。原账号与配置不会因 DNS 切换自动迁移。
 
 ## 发布和生产验收待办
 
-1. 确认现有 cpa 服务与此次部署的关系。
+1. 现有 cpa 服务属于另一台服务器，已确认；DNS 后续由用户切换。
 2. 审核并推送前端固定提交，合入后端及 server-ops 部署分支。
 3. 云端检查 completed/success 后创建个人 custom 标签；发布实际测试的 amd64 镜像及配套 Release，确认 GHCR 可匿名拉取。
 4. 用户在服务器执行初始化、安装及 HTTPS 流程，保留已有服务和数据；需要迁移时先给出迁移步骤。

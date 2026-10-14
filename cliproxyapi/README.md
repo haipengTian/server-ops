@@ -21,7 +21,7 @@ bash setup-nginx.sh
 
 已由用户确认的服务器环境：x86_64、nginx 1.26.3、Compose 5.6.0、可用内存 4.7 GiB、磁盘空间 44 GiB、8317 空闲。默认预算 768 MiB / 1 CPU。仍须现场确认 DNS 指向源站、80/443 可达、certbot 及续期定时任务可用、Docker 可访问 GHCR，以及模型服务出网正常。
 
-当前域名已经返回健康结果和管理页面，响应经过 Caddy。实际安装前须确认已有服务与本次部署的关系，已有 OAuth/config 数据先备份再决定迁移；不要直接覆盖现有站点。
+当前域名对应另一台服务器的既有服务（用户已确认），DNS 稍后由用户切换。此流程部署当前 xiguapier 服务器；切换 DNS 后再执行 `setup-nginx.sh`，证书 webroot 验证需到达本机。新服务先通过本机或 SSH 隧道检查，DNS 切换不代表原服务器的 OAuth/config 数据自动迁移。
 
 初始化前检查 Docker 现有网络，确保 `172.30.83.0/24` 不与已有网络或主机路由重叠；如需变更，同时修改 `CLIPROXY_SUBNET` 和 `CLIPROXY_GATEWAY` 后初始化。初始化会将 gateway 写入 `server.trusted-proxies`，后续改网络也必须同步改配置。首次申请证书建议使用直连源站 DNS。当前 nginx 模板要求 >=1.25.1。SELinux Enforcing 时，按脚本提示由用户启用 `httpd_can_network_connect`；四个专用挂载使用 `:Z`。
 
