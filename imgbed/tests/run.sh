@@ -55,6 +55,7 @@ echo 0
 MOCK
 cat > "$TEST_ROOT/bin/ss" <<'MOCK'
 #!/usr/bin/env bash
+if [[ ${FAIL:-} == port ]]; then echo LISTEN; fi
 exit 0
 MOCK
 REAL_TAR=$(command -v tar); export REAL_TAR
@@ -187,4 +188,70 @@ fixture
 export FAIL=start; run_fail backup.sh
 [[ $(cat "$SIM/running") == 0 ]] || fail 'restart failure hidden'
 pass 'backup restart failure is reported'
+
+# 将真实旧机备份移到传输目录，模拟没有配置、容器与数据的新机。
+restore_fixture() {
+  fixture
+  run_ok backup.sh --keep-stopped
+  backup=$(cat "$DATA/state/last-backup")
+  mv "$DATA" "$DATA-old"
+  backup="$DATA-old/backups/$(basename "$backup")"
+  mv "$OPS/.env" "$SIM/original.env"
+  rm "$SIM/image" "$SIM/running"
+  : > "$SIM/events"
+}
+[[ -f $ROOT/restore.sh ]] || { echo 'FAIL: missing first-restore entry point'; exit 1; }
+restore_fixture
+run_ok restore.sh "$backup"
+cmp "$OPS/.env" "$SIM/original.env" || fail 'restore changed original secrets or settings'
+for file in database.sqlite database.sqlite-wal r2/test.png; do
+  cmp "$DATA/app/$file" "$DATA-old/app/$file" || fail "restore lost $file"
+done
+[[ $(cat "$SIM/image") == "$OLD_IMAGE" && $(cat "$SIM/running") == 1 ]] || fail 'restore did not start original image'
+[[ $(cat "$DATA/state/current-image") == "$OLD_IMAGE" ]] || fail 'restore did not record original image'
+[[ $(stat -c %a "$OPS/.env") == 600 ]] || fail 'restored env permissions'
+for key in BASIC_PASS AUTH_CODE AI_CONFIG_SECRET; do
+  value=$(sed -n "s/^$key=//p" "$OPS/.env")
+  if grep -Fq "$value" "$SIM/output"; then fail 'restore printed a secret'; fi
+done
+pass 'first restore preserves original credentials, SQLite/WAL, local objects and exact image'
+
+for failure in checksum missing failed; do
+  restore_fixture
+  case "$failure" in
+    checksum) echo corrupt >> "$backup/data.tar.gz" ;;
+    missing) rm "$backup/deployment.env" ;;
+    failed) touch "$backup/FAILED" ;;
+  esac
+  run_fail restore.sh "$backup"
+  [[ ! -e $OPS/.env && ! -e $DATA && ! -s $SIM/events ]] || fail 'invalid backup mutated destination'
+  pass "restore rejects $failure backup before mutation"
+done
+
+for conflict in env app container port; do
+  restore_fixture
+  case "$conflict" in
+    env) cp "$SIM/original.env" "$OPS/.env" ;;
+    app) mkdir -p "$DATA/app"; echo sentinel > "$DATA/app/sentinel" ;;
+    container) echo "$NEW_IMAGE" > "$SIM/image"; echo 1 > "$SIM/running" ;;
+    port) export FAIL=port ;;
+  esac
+  run_fail restore.sh "$backup"
+  [[ ! -s $SIM/events ]] || fail 'restore modified a conflicting deployment'
+  if [[ $conflict == app ]]; then [[ $(cat "$DATA/app/sentinel") == sentinel ]] || fail 'restore overwrote existing data'; fi
+  if [[ $conflict == env ]]; then cmp "$SIM/original.env" "$OPS/.env" || fail 'restore overwrote existing env'; fi
+  pass "restore refuses existing $conflict"
+done
+
+restore_fixture
+export FAIL=pull; run_fail restore.sh "$backup"
+[[ ! -e $OPS/.env && ! -e $DATA ]] || fail 'pull failure committed restored data'
+pass 'restore pulls image before committing local data or configuration'
+
+restore_fixture
+export FAIL=wait; run_fail restore.sh "$backup"
+[[ $(cat "$SIM/running") == 0 && -f $DATA/state/failed-restore ]] || fail 'failed restore target not paused'
+cmp "$DATA/app/database.sqlite" "$DATA-old/app/database.sqlite" || fail 'failed restore deleted recovered data'
+cmp "$OPS/.env" "$SIM/original.env" || fail 'failed restore deleted recovered configuration'
+pass 'startup failure pauses restored target and preserves recovered data for diagnosis'
 echo "All $count isolated fixtures passed."

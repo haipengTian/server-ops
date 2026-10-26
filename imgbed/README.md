@@ -50,19 +50,53 @@ nginx 模板使用 `http2 on`，需要 nginx >= 1.25.1。默认应用内存上�
 
 继续使用 `img.thpvip.xyz` 且要保留旧图片时，先迁移整个数据目录与原部署 `.env`，再在新服务器启动。SQLite 保存图片索引、渠道和认证设置；即使图片在外部 S3/Telegram，也需要数据库中的原文件映射。保留原 `AI_CONFIG_SECRET`，使已有加密配置仍可读取。
 
-先在旧服务器确认实际镜像、数据挂载和数据量。完成新机空间、传输方式和恢复路径准备后，再进入正式迁移窗口：
+先在旧服务器确认实际镜像、数据挂载和数据量。以下命令以两台机器的仓库均在 `/opt/server-ops` 为例；其他位置替换 `cd` 路径。不要在新机运行 `init.sh` 生成新密钥。
+
+**先准备新机。** 更新仓库，确认 Docker 可用、7658 未被占用，并准备仅当前用户可访问的传输目录：
 
 ```bash
-# 旧服务器的 server-ops 仓库目录；此步骤会暂停旧图床。
+cd /opt/server-ops
+git pull --ff-only origin main
+sudo docker info >/dev/null
+sudo ss -ltn 'sport = :7658'
+install -d -m 700 "$HOME/imgbed-migration"
+```
+
+可先拉取旧容器的实际镜像，缩短维护窗口。本次旧机已确认的镜像为：
+
+```bash
+sudo docker pull ghcr.io/haipengtian/cloudflare-imgbed@sha256:6a5f47668a72147c8f47ffbd9496cdf82a3877367e329c11291e5be71a201735
+```
+
+**再在旧机备份。** 此步骤会暂停旧图床：
+
+```bash
+cd /opt/server-ops
 git pull --ff-only origin main
 sudo bash imgbed/backup.sh --keep-stopped
 ```
 
-该模式在成功后保持旧服务停止，确保转移期间没有新上传遗漏；备份失败会尝试恢复原服务。旧链接会在维护窗口暂时不可用，因此应先准备好传输和新机恢复步骤。把输出的完整备份目录（`data.tar.gz`、`deployment.env`、`image`、`SHA256SUMS`）安全转移到新机；备份含存储凭据和密钥，不要发到聊天。
+该模式在成功后保持旧服务停止，确保转移期间没有新上传遗漏；备份失败会尝试恢复原服务。旧链接会在维护窗口暂时不可用。通过现有 SSH/SFTP 客户端，将输出目录中的四个文件 `data.tar.gz`、`deployment.env`、`image`、`SHA256SUMS` 原样下载，再上传到新机 `avatar` 家目录下的 `imgbed-migration`，四个文件直接放在该目录。旧机备份目录需要 root 权限读取；备份含存储凭据和密钥，不要发到聊天或放到网站目录。无需在旧服务器配置登录新服务器的私钥。
 
-新机使用备份对应的同一镜像恢复整个 app 目录和原 `.env`。先通过本机或 SSH 隧道检查管理员登录、存储渠道、旧图片路径及新上传，确认后才切换 DNS。旧机的数据和备份保留到迁移验收完成。外部 Bucket/Telegram 文件保持原位；本地 `r2/` 对象必须随 app 目录转移。
+**在新机恢复。** 使用上传文件的 `avatar` 账号执行：
 
-若取消迁移，需要恢复旧机服务时，在旧机 `server-ops/imgbed` 目录执行：
+```bash
+cd /opt/server-ops
+sudo bash imgbed/restore.sh "$HOME/imgbed-migration"
+sudo bash imgbed/status.sh
+```
+
+恢复入口先验证完整备份和原配置，再检查目标容器、端口和数据目录，拉取备份指定的镜像后恢复完整 app。已有 `.env`、`app`、`state` 或同名项目容器时拒绝覆盖；启动或认证检查失败会暂停目标并保留数据，检查现场后再决定下一步，不要删除目录重试。该入口只用于新部署；已有服务的版本恢复见第7节。只恢复自己生成且可信的备份。
+
+**验收后切换域名。** 在自己的电脑建立 SSH 隧道：
+
+```bash
+ssh -p 8866 -N -L 17658:127.0.0.1:7658 avatar@新服务器公网IP
+```
+
+浏览器打开 `http://127.0.0.1:17658`，使用原管理密码检查渠道；把几张原图片 URL 的域名替换为 `http://127.0.0.1:17658`，保持路径与查询参数，验证旧图片读取，再测试小文件上传。确认后将 `img.thpvip.xyz` 的 DNS 指向新机。旧机的数据和备份保留到迁移验收完成。外部 Bucket/Telegram 文件保持原位；本地 `r2/` 对象随 app 目录转移。
+
+新机尚未承接新上传且 DNS 未切换时，若取消迁移，在旧机 `server-ops/imgbed` 目录恢复原服务：
 
 ```bash
 sudo docker compose --env-file .env up -d --no-recreate --no-deps --pull never --wait --wait-timeout 180 imgbed
@@ -75,6 +109,7 @@ sudo bash nginx/add-site.sh --domain img.thpvip.xyz --upstream http://127.0.0.1:
 ```
 
 公共入口兼容发行版 Nginx。本文原有 `imgbed/setup-nginx.sh` 使用独立模板，仍要求 Nginx >= 1.25.1。
+最后使用原来的 `https://img.thpvip.xyz/...` 图片链接验证公网读取及上传。若已在新机产生新增数据，应先处理数据差异，再决定是否回切旧机，避免丢失新上传的索引。
 
 ### 全新部署
 
