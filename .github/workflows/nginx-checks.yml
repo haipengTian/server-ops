@@ -24,6 +24,6 @@ jobs:
           find nginx -name '*.sh' -print0 | xargs -0 -n1 bash -n
           shellcheck -P SCRIPTDIR -x nginx/*.sh nginx/tests/*.sh
       - name: Isolated installation and failure tests
-        run: bash nginx/tests/run.sh
+        run: bash nginx/tests/run.sh "$(command -v nginx)"
       - name: Real nginx HTTPS and reverse proxy checks
         run: bash nginx/tests/integration.sh

@@ -40,7 +40,6 @@ read -r HTTP_PORT HTTPS_PORT BACKEND_HTTP_PORT BACKEND_HTTPS_PORT <<< "$ports"
 render_site() {
   DOMAIN=$1
   UPSTREAM=$2
-  CONNECTION_VAR="integration_${DOMAIN%%.*}_connection_upgrade"
   SSL_NAME=vpn.thpvip.xyz
   SSL_VERIFY=on
   UPSTREAM_CA="$TEST_ROOT/cert/fullchain.pem"
@@ -54,6 +53,7 @@ render_site() {
 }
 render_site vpn.thpvip.xyz "http://127.0.0.1:$BACKEND_HTTP_PORT"
 render_site app.thpvip.xyz "https://127.0.0.1:$BACKEND_HTTPS_PORT"
+cp "$ROOT/templates/websocket-map.conf" "$TEST_ROOT/conf.d/00-server-ops-websocket-map.conf"
 cat > "$TEST_ROOT/nginx.conf" <<EOF
 worker_processes 1;
 pid $TEST_ROOT/nginx.pid;
@@ -61,6 +61,7 @@ error_log $TEST_ROOT/error.log;
 events { worker_connections 64; }
 http {
     access_log off;
+    variables_hash_bucket_size 64;
     client_body_temp_path $TEST_ROOT/body;
     proxy_temp_path $TEST_ROOT/proxy;
     fastcgi_temp_path $TEST_ROOT/fastcgi;

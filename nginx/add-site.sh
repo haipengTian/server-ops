@@ -56,14 +56,12 @@ fi
 SSL_NAME=${UPSTREAM_SERVER_NAME:-$UPSTREAM_HOST}
 SSL_VERIFY=on
 [[ $UPSTREAM_INSECURE == false ]] || SSL_VERIFY=off
-# 域名不允许下划线；分别编码连字符和点，避免两个域名的 map 变量冲突。
-CONNECTION_VAR=${DOMAIN//-/__h__}
-CONNECTION_VAR="server_ops_${CONNECTION_VAR//./__d__}_connection_upgrade"
 require_root
 require_commands nginx certbot curl getent systemctl flock
 [[ -d $CONF_DIR ]] || die 'nginx 配置目录不存在，请先运行 install.sh'
 CONF="$CONF_DIR/$DOMAIN.conf"
 require_owned "$CONF"
+require_owned "$MAP_CONF"
 lock_operation
 systemctl is-active --quiet nginx || die 'nginx 未运行，请先运行 install.sh'
 nginx -t
@@ -74,19 +72,23 @@ TRANSACTION=$(mktemp -d)
 COMPLETED=false
 HAD_CONF=false
 if [[ -f $CONF ]]; then cp -p -- "$CONF" "$TRANSACTION/site.conf"; HAD_CONF=true; fi
+if [[ -f $MAP_CONF ]]; then cp -p -- "$MAP_CONF" "$TRANSACTION/websocket-map.conf"; fi
 restore_on_exit() {
-  local status=$?
+  local status=$? file backup
   trap - EXIT INT TERM
   if [[ $COMPLETED != true ]]; then
-    if [[ $HAD_CONF == true ]]; then
-      if ! cp -p -- "$TRANSACTION/site.conf" "$CONF"; then
-        printf '恢复文件失败，备份保留在 %s；请立即检查 nginx。\n' "$TRANSACTION" >&2
+    for file in "$CONF" "$MAP_CONF"; do
+      if [[ $file == "$CONF" ]]; then backup="$TRANSACTION/site.conf"; else backup="$TRANSACTION/websocket-map.conf"; fi
+      if [[ -f $backup ]]; then
+        if ! cp -p -- "$backup" "$file"; then
+          printf '恢复文件失败：%s；备份保留在 %s，请立即检查 nginx。\n' "$file" "$TRANSACTION" >&2
+          exit 1
+        fi
+      elif ! rm -f -- "$file"; then
+        printf '清理本次配置失败：%s；事务目录：%s\n' "$file" "$TRANSACTION" >&2
         exit 1
       fi
-    elif ! rm -f -- "$CONF"; then
-      printf '清理本站配置失败：%s；事务目录：%s\n' "$CONF" "$TRANSACTION" >&2
-      exit 1
-    fi
+    done
     if ! apply_nginx; then
       printf '本站配置已还原，但恢复后的 nginx 检查或重载失败；备份保留在 %s。\n' "$TRANSACTION" >&2
       exit 1
@@ -100,6 +102,9 @@ trap restore_on_exit EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 install -d -m 755 "$WEBROOT"
+# 所有站点使用相同的 Upgrade 映射，短变量适配默认 64 字节哈希桶。
+# 接入入口也安装它，升级脚本后无需重新执行主机安装。
+install -m 644 "$OPS_DIR/templates/websocket-map.conf" "$MAP_CONF"
 if [[ $HAD_CONF == false || ! -s $CERT_DIR/$DOMAIN/fullchain.pem || ! -s $CERT_DIR/$DOMAIN/privkey.pem ]]; then
   # 临时站点只提供 ACME 验证，避免签发前暴露明文管理页面。
   render http.conf.template > "$TRANSACTION/new.conf"

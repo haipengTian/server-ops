@@ -1,9 +1,4 @@
 # Managed by server-ops/nginx
-map $http_upgrade $__CONNECTION_VAR__ {
-    default upgrade;
-    '' close;
-}
-
 server {
     listen 80;
     listen [::]:80;
@@ -38,7 +33,7 @@ server {
         proxy_set_header True-Client-IP "";
         proxy_set_header X-CDN-Client-IP "";
         proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection $__CONNECTION_VAR__;
+        proxy_set_header Connection $server_ops_upgrade;
         proxy_buffering off;
         proxy_request_buffering off;
         proxy_read_timeout 1h;

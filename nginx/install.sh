@@ -32,6 +32,7 @@ esac
 require_commands dnf systemctl ss flock
 lock_operation
 require_owned "$RELOAD_HOOK"
+require_owned "$MAP_CONF"
 listeners=$(ss -ltnp)
 conflicts=$(awk '$4 ~ /:(80|443)$/ && $0 !~ /"nginx"/ {print}' <<< "$listeners")
 [[ -z $conflicts ]] || die "80/443 已被其他进程占用，请保留现有服务并先安排入口：$conflicts"
@@ -60,6 +61,7 @@ install -d -m 755 "$WEBROOT"
 if command -v restorecon >/dev/null; then restorecon -RF "$WEBROOT"; fi
 install -d -m 755 "$(dirname -- "$RELOAD_HOOK")"
 install -m 755 "$OPS_DIR/reload-after-renew.sh" "$RELOAD_HOOK"
+install -m 644 "$OPS_DIR/templates/websocket-map.conf" "$MAP_CONF"
 nginx -t
 systemctl enable --now nginx
 systemctl enable --now "$timer"

@@ -2,11 +2,18 @@
 # 运行真实入口；只模拟包管理、服务、网络和证书签发，文件事务为真实操作。
 set -euo pipefail
 ROOT=$(cd -- "$(dirname -- "$0")/.." && pwd)
+TEST_NGINX_BIN=${1:-}
+if [[ -n $TEST_NGINX_BIN ]]; then TEST_NGINX_BIN=$(command -v -- "$TEST_NGINX_BIN"); fi
+export TEST_NGINX_BIN
 TEST_ROOT=$(mktemp -d /tmp/server-ops-nginx-tests-XXXXXXXX)
 trap 'rm -rf -- "$TEST_ROOT"' EXIT
 fail() { printf 'FAIL: %s\n' "$*" >&2; [[ ! -f ${SIM:-}/output ]] || cat "$SIM/output" >&2; exit 1; }
 [[ -f $ROOT/install.sh && -f $ROOT/add-site.sh ]] || fail '缺少公共 nginx 安装和站点接入入口'
 mkdir "$TEST_ROOT/bin"
+if [[ -n $TEST_NGINX_BIN ]]; then
+  openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj '/CN=vpn.thpvip.xyz' \
+    -keyout "$TEST_ROOT/privkey.pem" -out "$TEST_ROOT/fullchain.pem" >/dev/null 2>&1
+fi
 cat > "$TEST_ROOT/bin/id" <<'MOCK'
 #!/usr/bin/env bash
 echo 0
@@ -14,6 +21,9 @@ MOCK
 cat > "$TEST_ROOT/bin/nginx" <<'MOCK'
 #!/usr/bin/env bash
 echo "nginx $*" >> "$SIM/events"
+if [[ $MODE == actual-nginx ]]; then
+  exec "$TEST_NGINX_BIN" -p "$SIM/" -c "$SIM/nginx.conf" -e "$SIM/error.log" "$@"
+fi
 if [[ $MODE == duplicate-name && -f $SIM/etc/nginx/conf.d/vpn.thpvip.xyz.conf ]]; then
   echo 'nginx: [warn] conflicting server name "vpn.thpvip.xyz" on 0.0.0.0:80, ignored' >&2
 fi
@@ -57,6 +67,11 @@ echo "certbot $*" >> "$SIM/events"
 [[ $MODE != cert-failure ]] || exit 1
 dir="$SIM/etc/letsencrypt/live/vpn.thpvip.xyz"
 mkdir -p "$dir"
+if [[ $MODE == actual-nginx ]]; then
+  cp "$SIM/../fullchain.pem" "$dir/fullchain.pem"
+  cp "$SIM/../privkey.pem" "$dir/privkey.pem"
+  exit 0
+fi
 echo certificate > "$dir/fullchain.pem"
 echo private-key > "$dir/privkey.pem"
 MOCK
@@ -103,6 +118,7 @@ fixture() {
   echo fixture-ca > "$SIM/etc/pki/tls/certs/ca-bundle.crt"
   echo 0 > "$SIM/attempts"; echo 0 > "$SIM/reloads"; : > "$SIM/events"
   CONF="$SIM/etc/nginx/conf.d/vpn.thpvip.xyz.conf"
+  MAP="$SIM/etc/nginx/conf.d/00-server-ops-websocket-map.conf"
   echo unrelated-site > "$SIM/etc/nginx/conf.d/other.example.com.conf"
 }
 site() { bash "$OPS/add-site.sh" --domain vpn.thpvip.xyz --upstream http://127.0.0.1:8888 --email fixture@example.com "$@"; }
@@ -133,6 +149,12 @@ echo unmanaged-site > "$CONF"
 run_fail site
 [[ $(cat "$CONF") == unmanaged-site && ! -s $SIM/events ]] || fail '覆盖了非本工具管理的站点'
 echo 'PASS: 拒绝覆盖已有其他部署入口管理的站点'
+
+fixture normal
+echo unmanaged-map > "$MAP"
+run_fail site
+[[ $(cat "$MAP") == unmanaged-map && ! -e $CONF && ! -s $SIM/events ]] || fail '覆盖了其他入口管理的 map'
+echo 'PASS: 拒绝覆盖未由本工具管理的共用 map'
 
 fixture duplicate-name
 echo existing-vpn-site > "$SIM/etc/nginx/conf.d/00-existing.conf"
@@ -180,17 +202,55 @@ echo 'PASS: 协议错误和 DNS 缺失在签发及写站点前停止'
 for mode in cert-failure wrong-cert bad-gateway reload-failure syntax-failure; do
   fixture "$mode"
   printf '# Managed by server-ops/nginx\noriginal-site\n' > "$CONF"
+  printf '# Managed by server-ops/nginx\noriginal-map\n' > "$MAP"
   cp "$CONF" "$SIM/original"
+  cp "$MAP" "$SIM/original-map"
   run_fail site
   cmp -s "$CONF" "$SIM/original" || fail "$mode 未恢复旧站点"
+  cmp -s "$MAP" "$SIM/original-map" || fail "$mode 未恢复共用 map"
   unchanged_other
 done
-echo 'PASS: 签发、TLS、502、重载和语法失败均恢复旧站点'
+echo 'PASS: 签发、TLS、502、重载和语法失败均恢复旧站点与共用 map'
 
 fixture wrong-cert
 run_fail site
-[[ ! -e $CONF && $(cat "$SIM/attempts") -le 10 ]] || fail '新站点失败未清理或重试无界'
+[[ ! -e $CONF && ! -e $MAP && $(cat "$SIM/attempts") -le 10 ]] || fail '新站点失败未清理或重试无界'
 echo 'PASS: 新站点失败只清理本站配置，TLS 验证不降级'
+
+if [[ -n $TEST_NGINX_BIN ]]; then
+  fixture actual-nginx
+  rm "$SIM/etc/nginx/conf.d/other.example.com.conf"
+  # nginx -t 也可能尝试绑定监听地址；沙箱使用系统分配的非特权端口。
+  read -r test_http_port test_https_port < <(python3 - <<'PY'
+import socket
+with socket.socket() as http, socket.socket() as https:
+    http.bind(('127.0.0.1', 0))
+    https.bind(('127.0.0.1', 0))
+    print(http.getsockname()[1], https.getsockname()[1])
+PY
+)
+  sed -i -e "s|listen 80;|listen 127.0.0.1:$test_http_port;|" \
+    -e "s|listen 443 ssl;|listen 127.0.0.1:$test_https_port ssl;|" \
+    -e '/listen \[::\]/d' "$OPS/templates/"*.template
+  cat > "$SIM/nginx.conf" <<EOF
+pid $SIM/nginx.pid;
+error_log $SIM/error.log;
+events { worker_connections 64; }
+http {
+    access_log off;
+    variables_hash_bucket_size 64;
+    client_body_temp_path $SIM/body;
+    proxy_temp_path $SIM/proxy;
+    fastcgi_temp_path $SIM/fastcgi;
+    uwsgi_temp_path $SIM/uwsgi;
+    scgi_temp_path $SIM/scgi;
+    include $SIM/etc/nginx/conf.d/*.conf;
+}
+EOF
+  run_ok site
+  grep -q 'proxy_pass http://127.0.0.1:8888;' "$CONF" || fail '真实入口未产生代理配置'
+  echo 'PASS: 真实 add-site.sh 渲染的配置通过 nginx 的 64 字节变量哈希桶检查'
+fi
 
 fixture normal
 run_ok bash "$OPS/install.sh" --firewall-zone external
@@ -199,6 +259,7 @@ unchanged_other
 grep -q 'setsebool -P httpd_can_network_connect on' "$SIM/events" || fail '缺少 SELinux 配置'
 grep -q 'enable --now certbot-renew.timer' "$SIM/events" || fail '续期未启用'
 [[ -x $SIM/etc/letsencrypt/renewal-hooks/deploy/server-ops-nginx-reload ]] || fail '缺少证书续期重载 hook'
+[[ -f $MAP ]] || fail '未安装共用 WebSocket map'
 grep -q -- '--zone=external --add-service=http' "$SIM/events" || fail '忽略指定防火墙区域'
 ! grep -Eq '(reload firewalld|enable.*firewalld|--runtime-to-permanent|--remove)' "$SIM/events" || fail '破坏了已有防火墙'
 echo 'PASS: 安装可重入，配置续期和 SELinux，仅添加指定区域的 80/443'

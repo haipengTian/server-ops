@@ -63,6 +63,8 @@ sudo bash nginx/add-site.sh \
 
 每个站点保存在 `/etc/nginx/conf.d/<域名>.conf`，独立证书保存在 `/etc/letsencrypt/live/<域名>/`。脚本只更新带有 `Managed by server-ops/nginx` 标记的本站配置；若目标已经由其他部署入口管理，则停止并保留原文件。
 
+所有站点共用 `/etc/nginx/conf.d/00-server-ops-websocket-map.conf` 中的短变量，适配 nginx 默认的 `variables_hash_bucket_size 64`。更新脚本后，直接重跑接入命令即可安装该文件，无需修改全局哈希参数或重新执行主机安装。
+
 如果 nginx 报告当前域名与另一份配置冲突，即使 `nginx -t` 返回成功，脚本也会停止发布并恢复本站配置，避免把仍由旧后端响应的站点误报为接入成功。
 
 首次签发时临时站点只开放 ACME 验证路径，不提供明文面板。Certbot 使用 webroot 模式并配置邮箱、接受 Let's Encrypt 服务条款；有效证书通过 `--keep-until-expiring` 复用。重复执行相同命令可以更新本站配置。
@@ -105,7 +107,7 @@ systemctl list-timers --all | grep certbot
 
 Certbot 成功续期后执行 `/etc/letsencrypt/renewal-hooks/deploy/server-ops-nginx-reload`，先 `nginx -t` 再重载，使新 worker 使用新证书。安装时找不到发行版续期 timer 会明确失败。
 
-遇到配置、签发、重载或 HTTPS 就绪失败，脚本恢复原站点并重载；首次接入失败则删除本次创建的站点配置。已签发的证书保留，方便修复原因后重试。若恢复本身失败，会报告保留备份的事务目录，需立即检查 nginx。包安装、SELinux 和明确添加的防火墙规则不随站点事务回滚。
+遇到配置、签发、重载或 HTTPS 就绪失败，脚本恢复原站点与共用 map 并重载；首次接入失败则删除本次创建的配置。已签发的证书保留，方便修复原因后重试。若恢复本身失败，会报告保留备份的事务目录，需立即检查 nginx。包安装、SELinux 和明确添加的防火墙规则不随站点事务回滚。
 
 原有 `sub2api/`、`imgbed/` 等应用的 `setup-nginx.sh` 继续使用各自配置。本次接入不会修改 3x-ui 的监听、密码、代理入站或订阅设置；2096 订阅服务需另行接入。域名登录验证通过后，再将管理面板收紧到回环监听。
 
@@ -114,8 +116,8 @@ Certbot 成功续期后执行 `/etc/letsencrypt/renewal-hooks/deploy/server-ops-
 ```bash
 find nginx -name '*.sh' -print0 | xargs -0 -n1 bash -n
 shellcheck -P SCRIPTDIR -x nginx/*.sh nginx/tests/*.sh
-bash nginx/tests/run.sh
+bash nginx/tests/run.sh "$(command -v nginx)"
 bash nginx/tests/integration.sh
 ```
 
-隔离测试运行真实部署入口，模拟包管理、服务、HTTP 和 CA 签发边界；真实 nginx 集成测试使用临时端口和临时证书，验证多域名、HTTP/HTTPS 后端、路径转发、IP 头和 ACME 路径。它们不执行真实 dnf 安装或访问 Let's Encrypt，也不代替目标服务器部署验收。
+隔离测试运行真实部署入口，模拟包管理、服务、HTTP 和 CA 签发边界；传入 nginx 路径后，还将真实入口渲染的配置交给 nginx，以默认 64 字节变量哈希桶检查。真实 nginx 集成测试使用临时端口和临时证书，验证多域名、HTTP/HTTPS 后端、路径转发、IP 头和 ACME 路径。它们不执行真实 dnf 安装或访问 Let's Encrypt，也不代替目标服务器部署验收。

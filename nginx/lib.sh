@@ -6,6 +6,8 @@ OPS_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck disable=SC2034
 CONF_DIR=/etc/nginx/conf.d
 # shellcheck disable=SC2034
+MAP_CONF=/etc/nginx/conf.d/00-server-ops-websocket-map.conf
+# shellcheck disable=SC2034
 WEBROOT=/var/www/certbot
 # shellcheck disable=SC2034
 CERT_DIR=/etc/letsencrypt/live
@@ -37,7 +39,6 @@ render() {
   local template=$1
   sed -e "s|__DOMAIN__|$DOMAIN|g" \
       -e "s|__UPSTREAM__|$UPSTREAM|g" \
-      -e "s|__CONNECTION_VAR__|$CONNECTION_VAR|g" \
       -e "s|__SSL_NAME__|$SSL_NAME|g" \
       -e "s|__SSL_VERIFY__|$SSL_VERIFY|g" \
       -e "s|__UPSTREAM_CA__|$UPSTREAM_CA|g" \
