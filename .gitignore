@@ -19,3 +19,7 @@ cliproxyapi/.env.*
 cliproxyapi/.operation.lock
 cliproxyapi/.transaction.*
 cliproxyapi/**/__pycache__/
+
+pansou/.env.*
+!pansou/.env.example
+pansou/.operation.lock

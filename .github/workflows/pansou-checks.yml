@@ -1,0 +1,22 @@
+name: PanSou deployment checks
+on:
+  push:
+    paths: ['pansou/**', '.github/workflows/pansou-checks.yml']
+  pull_request:
+    paths: ['pansou/**', '.github/workflows/pansou-checks.yml']
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - name: Shell syntax and lint
+        run: |
+          find pansou -name '*.sh' -print0 | xargs -0 -n1 bash -n
+          shellcheck -P SCRIPTDIR -x pansou/*.sh pansou/tests/*.sh
+      - name: Isolated initialization and failure tests
+        run: bash pansou/tests/run.sh
+      - name: Published image and persisted settings integration
+        run: sudo --preserve-env=CI bash pansou/tests/integration.sh

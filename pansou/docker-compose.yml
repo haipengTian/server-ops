@@ -1,0 +1,47 @@
+services:
+  pansou:
+    image: ${PANSOU_IMAGE:?先运行 init.sh}
+    restart: unless-stopped
+    security_opt: [no-new-privileges:true]
+    ports:
+      - "127.0.0.1:${PANSOU_HOST_PORT:-9000}:80"
+    volumes:
+      - ${PANSOU_DATA_DIR:-/opt/pansou}/app:/app/data:Z
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      PANSOU_HOST: "127.0.0.1"
+      PANSOU_PORT: "8888"
+      PANSOU_DATA_DIR: /app/data/admin
+      CACHE_PATH: /app/data/cache
+      LOG_PATH: /app/data/logs
+      AUTH_ENABLED: "true"
+      ADMIN_USERS: ${ADMIN_USERS:?请在服务器本地填写 ADMIN_USERS}
+      AUTH_USERS: ""
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:?缺少 JWT 密钥}
+      AUTH_TOKEN_EXPIRY: "24"
+      ASYNC_PLUGIN_ENABLED: "true"
+      CHANNELS: ${CHANNELS:?缺少完整频道清单}
+      ENABLED_PLUGINS: ${ENABLED_PLUGINS:?缺少完整插件清单}
+      INSECURE_SKIP_TLS_VERIFY: "false"
+      CACHE_ENABLED: "true"
+      CACHE_MAX_SIZE: "100"
+      CACHE_TTL: "60"
+      CACHE_WRITE_STRATEGY: hybrid
+      PLUGIN_TIMEOUT: "10"
+      ASYNC_RESPONSE_TIMEOUT: "4"
+      ASYNC_MAX_BACKGROUND_WORKERS: "20"
+      ASYNC_MAX_BACKGROUND_TASKS: "100"
+      OUTBOUND_MAX_CONCURRENCY: "128"
+    mem_limit: ${PANSOU_MEM_LIMIT:-1g}
+    cpus: ${PANSOU_CPUS:-2}
+    pids_limit: 512
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+    healthcheck:
+      test: [CMD, /app/healthcheck.sh]
+      interval: 10s
+      timeout: 10s
+      start_period: 45s
+      retries: 6
