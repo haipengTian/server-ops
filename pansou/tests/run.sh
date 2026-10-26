@@ -45,6 +45,10 @@ case "$1" in
     if [[ $MODE == running || $2 == -a && $MODE == stopped-* ]]; then echo existing-container; fi
     exit 0 ;;
   up)
+    if [[ " $* " == *' --no-recreate '* ]]; then
+      [[ " $* " == *' --pull never '* ]] || exit 93
+      touch "$SIM/resumed"
+    fi
     [[ $MODE != unhealthy ]] || exit 1
     mkdir -p "$PANSOU_DATA_DIR/app/admin"
     if [[ ! -f $PANSOU_DATA_DIR/app/admin/settings.json ]]; then
@@ -55,7 +59,9 @@ case "$1" in
       fi
     fi ;;
   stop) touch "$SIM/stopped" ;;
-  start) touch "$SIM/resumed" ;;
+  start)
+    [[ " $* " != *' --wait '* ]] || { echo 'unknown flag: --wait' >&2; exit 1; }
+    touch "$SIM/resumed" ;;
   *) exit 91 ;;
 esac
 MOCK

@@ -14,7 +14,7 @@ resume() {
   local status=$?
   trap - EXIT
   if [[ -n $running ]]; then
-    if ! compose start --wait --wait-timeout "$PANSOU_WAIT_SECONDS" pansou; then
+    if ! compose up -d --no-recreate --no-deps --pull never --wait --wait-timeout "$PANSOU_WAIT_SECONDS" pansou; then
       printf '备份后恢复服务失败，请检查 PanSou 容器。\n' >&2
       status=1
     fi
