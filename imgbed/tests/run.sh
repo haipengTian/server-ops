@@ -114,6 +114,23 @@ run_fail backup.sh
 pass 'configuration is parsed as data, never executed'
 
 fixture
+sed -i 's/^BASIC_PASS=.*/BASIC_PASS=Example-Admin!2026/;s/^AUTH_CODE=.*/AUTH_CODE=Example-Upload!2026/;s/^AI_CONFIG_SECRET=.*/AI_CONFIG_SECRET=Example-AI-Encryption-Secret-2026!/' "$OPS/.env"
+cp "$OPS/.env" "$SIM/original.env"
+run_ok backup.sh --keep-stopped
+backup=$(cat "$DATA/state/last-backup")
+cmp "$backup/deployment.env" "$SIM/original.env" || fail 'backup changed custom credentials'
+[[ $(cat "$SIM/running") == 0 ]] || fail 'custom credential backup resumed writers'
+pass 'migration backup accepts existing non-hex credentials without changing them'
+
+for key in BASIC_PASS AUTH_CODE AI_CONFIG_SECRET; do
+  fixture
+  sed -i "s/^$key=.*/$key=/" "$OPS/.env"
+  run_fail backup.sh
+  [[ ! -s $SIM/events && $(cat "$SIM/running") == 1 ]] || fail 'empty credential changed service'
+  pass "empty $key is still rejected before stopping service"
+done
+
+fixture
 run_ok backup.sh
 backup=$(cat "$DATA/state/last-backup")
 [[ $(cat "$SIM/running") == 1 ]] || fail 'backup did not resume app'
@@ -192,6 +209,9 @@ pass 'backup restart failure is reported'
 # 将真实旧机备份移到传输目录，模拟没有配置、容器与数据的新机。
 restore_fixture() {
   fixture
+  if [[ ${1:-} == custom-credentials ]]; then
+    sed -i 's/^BASIC_PASS=.*/BASIC_PASS=Example-Admin!2026/;s/^AUTH_CODE=.*/AUTH_CODE=Example-Upload!2026/;s/^AI_CONFIG_SECRET=.*/AI_CONFIG_SECRET=Example-AI-Encryption-Secret-2026!/' "$OPS/.env"
+  fi
   run_ok backup.sh --keep-stopped
   backup=$(cat "$DATA/state/last-backup")
   mv "$DATA" "$DATA-old"
@@ -215,6 +235,16 @@ for key in BASIC_PASS AUTH_CODE AI_CONFIG_SECRET; do
   if grep -Fq "$value" "$SIM/output"; then fail 'restore printed a secret'; fi
 done
 pass 'first restore preserves original credentials, SQLite/WAL, local objects and exact image'
+
+restore_fixture custom-credentials
+run_ok restore.sh "$backup"
+cmp "$OPS/.env" "$SIM/original.env" || fail 'restore changed custom credentials'
+[[ $(cat "$SIM/running") == 1 ]] || fail 'custom credential restore did not start'
+for key in BASIC_PASS AUTH_CODE AI_CONFIG_SECRET; do
+  value=$(sed -n "s/^$key=//p" "$OPS/.env")
+  if grep -Fq "$value" "$SIM/output"; then fail 'restore printed a custom credential'; fi
+done
+pass 'restore preserves custom passwords and original non-hex encryption secret'
 
 for failure in checksum missing failed; do
   restore_fixture

@@ -57,9 +57,8 @@ load_env() {
   [[ $TZ =~ ^[A-Za-z_]+(/[A-Za-z0-9_+-]+)*$ ]] || die '时区格式无效'
   [[ $IMGBED_MEM_LIMIT =~ ^[1-9][0-9]*[mg]$ ]] || die 'IMGBED_MEM_LIMIT 应使用正整数加 m 或 g'
   [[ $IMGBED_CPUS =~ ^[0-9]+(\.[0-9]+)?$ && $IMGBED_CPUS =~ [1-9] ]] || die 'IMGBED_CPUS 应为正数'
-  for key in BASIC_PASS AUTH_CODE AI_CONFIG_SECRET; do
-    [[ ${!key} =~ ^[a-f0-9]{64}$ ]] || die "$key 须保留 init.sh 生成的 64 位十六进制值"
-  done
+  # init.sh 的随机值格式是生成默认值，不是已有密码或密钥的迁移要求。
+  # 上面的必填与字面值校验仍适用；迁移必须保留原值，不能重新生成。
   STATE_DIR="$IMGBED_DATA_DIR/state"
 }
 compose() { docker compose --project-directory "$OPS_DIR" --env-file "$ENV_FILE" -f "$OPS_DIR/docker-compose.yml" -p "$COMPOSE_PROJECT_NAME" "$@"; }

@@ -124,7 +124,8 @@ bash status.sh
 ```
 
 `.env` 使用 `KEY=value` 字面值，不加引号、空格或变量展开。init 自动生成 BASIC_PASS、AUTH_CODE、
-AI_CONFIG_SECRET，文件权限为 0600；已有文件会保留。BASIC_USER 默认 admin。
+AI_CONFIG_SECRET（默认均为64位十六进制值），文件权限为 0600；已有文件会保留。BASIC_USER 默认 admin。
+备份和恢复接受原有的非空字面值密码、密钥，不要求符合 init 的随机值格式；迁移时保留原值，尤其不要重新生成 AI_CONFIG_SECRET。
 用户在服务器本地查看 BASIC_PASS 登录管理端；AUTH_CODE 是用户页面/上传访问密码。
 这些环境变量是初始配置，数据库里保存的设置优先；不要通过重新 init 重置已有认证和 AI 加密密钥。
 管理页面改密码后，数据库保存的新密码会覆盖环境变量。不得清除管理员或上传认证，部署检查要求两者拒绝匿名请求。
