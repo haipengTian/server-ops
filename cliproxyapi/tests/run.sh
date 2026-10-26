@@ -22,9 +22,18 @@ case "$cmd" in
   pull) echo pull >> "$SIM/events"; [[ ${FAIL:-} != pull ]] ;;
   ps) if [[ -f $SIM/image ]] && { [[ " $* " != *' --status running '* ]] || [[ $(cat "$SIM/running") == 1 ]]; }; then echo app; fi ;;
   stop) echo stop >> "$SIM/events"; echo 0 > "$SIM/running" ;;
-  start) echo start >> "$SIM/events"; [[ ${FAIL:-} != start ]] || exit 1; echo 1 > "$SIM/running" ;;
+  start)
+    [[ " $* " != *' --wait '* ]] || { echo 'unknown flag: --wait' >&2; exit 1; }
+    echo start >> "$SIM/events"; [[ ${FAIL:-} != start ]] || exit 1; echo 1 > "$SIM/running" ;;
   up)
     if [[ $* == --help ]]; then echo --wait-timeout; exit 0; fi
+    if [[ " $* " == *' --no-recreate '* ]]; then
+      [[ " $* " == *' --pull never '* && " $* " == *' --no-deps '* && " $* " == *' --wait '* ]] || exit 92
+      echo "resume $*" >> "$SIM/events"
+      [[ ${FAIL:-} != start ]] || exit 1
+      echo 1 > "$SIM/running"
+      exit 0
+    fi
     echo up >> "$SIM/events"; echo "$CLIPROXY_IMAGE" > "$SIM/image"; echo 1 > "$SIM/running"
     [[ ${FAIL:-} != wait ]] ;;
   exec) [[ ${FAIL:-} != weak-auth && ${FAIL:-} != disabled-management ]] ;;

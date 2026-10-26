@@ -13,7 +13,7 @@ resume() {
   local status=$?
   trap - EXIT
   if [[ -n $was_running ]]; then
-    if ! compose start --wait --wait-timeout "$CLIPROXY_WAIT_SECONDS" cliproxyapi; then
+    if ! compose up -d --no-recreate --no-deps --pull never --wait --wait-timeout "$CLIPROXY_WAIT_SECONDS" cliproxyapi; then
       printf '应用恢复失败，请检查 compose 状态。\n' >&2
       status=1
     fi

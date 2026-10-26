@@ -6,6 +6,36 @@
 
 ## 首次安装
 
+### 新 CentOS 9 主机复用公共 Nginx
+
+主机已用本仓库 `nginx/` 管理 HTTPS 时，从 `server-ops` 根目录执行以下全新安装流程。若要迁移旧服务器的 OAuth 和配置，先保留旧数据与密钥，按迁移方案恢复，不使用全新配置替换。
+
+```bash
+sudo bash cliproxyapi/init.sh ghcr.io/haipengtian/cliproxyapi:8.0.20-custom.1
+sudo vi cliproxyapi/.env
+sudo bash cliproxyapi/install.sh
+sudo bash cliproxyapi/status.sh
+```
+
+在 `.env` 填写 `CLIPROXY_DOMAIN` 和 `CERTBOT_EMAIL`；默认域名仍为 `cpa.thpvip.xyz`，使用 `.cn` 时改成对应域名。应用只发布到 `127.0.0.1:8317`，默认内存上限 768 MiB。Docker 子网 `172.30.83.0/24` 必须不与主机路由及现有 Docker 网络重叠。
+
+管理密钥和客户端 API Key 由初始化自动生成，用户只在服务器本地查看 `/opt/cliproxyapi/secrets/initial-keys`，不要发送到聊天。管理页面使用 `MANAGEMENT_KEY` 登录；接入上游账号后再验证实际模型调用。
+
+DNS 指向新服务器后，在仓库根目录运行公共入口，下面的域名和邮箱替换为 `.env` 中的实际值：
+
+```bash
+sudo bash nginx/add-site.sh \
+  --domain cpa.thpvip.xyz \
+  --upstream http://127.0.0.1:8317 \
+  --email 你的证书通知邮箱
+```
+
+后台为 `https://你的域名/management.html`，API 基址为 `https://你的域名/v1`。在自己电脑上可先通过 SSH 隧道检查：`ssh -p 8866 -L 18317:127.0.0.1:8317 avatar@新服务器公网IP`，然后访问 `http://127.0.0.1:18317/management.html`。
+
+公共入口兼容 CentOS 9 发行版 Nginx。以下原有 `cliproxyapi/setup-nginx.sh` 流程使用独立模板，要求 Nginx >= 1.25.1；新主机按上面的公共入口接入即可。
+
+### 原有独立 Nginx 模板部署
+
 服务器已有 `/opt/server-ops` 时先检查该仓库的分支与未提交修改，再更新到已审核发布的部署提交。不要重置服务器的本地配置。
 
 ```bash
