@@ -22,9 +22,18 @@ case "$cmd" in
   pull) echo pull >> "$SIM/events"; [[ ${FAIL:-} != pull ]] ;;
   ps) if [[ -f $SIM/image ]] && { [[ " $* " != *' --status running '* ]] || [[ $(cat "$SIM/running") == 1 ]]; }; then echo app; fi ;;
   stop) echo stop >> "$SIM/events"; echo 0 > "$SIM/running" ;;
-  start) echo start >> "$SIM/events"; [[ ${FAIL:-} != start ]] || exit 1; echo 1 > "$SIM/running" ;;
+  start)
+    [[ " $* " != *' --wait '* ]] || { echo 'unknown flag: --wait' >&2; exit 1; }
+    echo start >> "$SIM/events"; [[ ${FAIL:-} != start ]] || exit 1; echo 1 > "$SIM/running" ;;
   up)
     if [[ $* == --help ]]; then echo --wait-timeout; exit 0; fi
+    if [[ " $* " == *' --no-recreate '* ]]; then
+      [[ " $* " == *' --pull never '* && " $* " == *' --no-deps '* && " $* " == *' --wait '* ]] || exit 92
+      echo "resume $*" >> "$SIM/events"
+      [[ ${FAIL:-} != start ]] || exit 1
+      echo 1 > "$SIM/running"
+      exit 0
+    fi
     echo up >> "$SIM/events"; echo "$IMGBED_IMAGE" > "$SIM/image"; echo 1 > "$SIM/running"
     [[ ${FAIL:-} != wait ]] ;;
   exec) [[ ${FAIL:-} != weak-auth ]] ;;
@@ -112,6 +121,21 @@ tar -tzf "$backup/data.tar.gz" | grep -q r2/test.png || fail 'local objects omit
 (cd "$backup" && sha256sum -c SHA256SUMS >/dev/null) || fail 'checksum invalid'
 [[ $(stat -c %a "$backup/deployment.env") == 600 ]] || fail 'backup permissions'
 pass 'backup stops writers, archives SQLite/WAL and local objects, verifies checksums and resumes'
+
+fixture
+run_ok backup.sh --keep-stopped
+[[ $(cat "$SIM/running") == 0 ]] || fail 'migration backup resumed old writers'
+[[ -f $(cat "$DATA/state/last-backup")/data.tar.gz ]] || fail 'migration backup missing'
+pass 'migration backup keeps the old service stopped after a complete snapshot'
+
+fixture
+export FAIL=archive; run_fail backup.sh --keep-stopped; original
+pass 'failed migration backup resumes the original service'
+
+fixture
+run_fail backup.sh --unsupported
+[[ ! -s $SIM/events ]] || fail 'invalid backup option mutated service'
+pass 'invalid backup options are rejected before stopping service'
 
 fixture
 export FAIL=archive; run_fail update.sh "$NEW_TAG"; original

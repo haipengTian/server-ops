@@ -151,7 +151,7 @@ finish_app_transaction() {
         rm -f -- "$STATE_DIR/previous-image" || status=1
       fi
       if [[ -n $transaction_was_running ]]; then
-        compose start --wait --wait-timeout "$IMGBED_WAIT_SECONDS" imgbed || status=1
+        compose up -d --no-recreate --no-deps --pull never --wait --wait-timeout "$IMGBED_WAIT_SECONDS" imgbed || status=1
       fi
       printf '目标镜像尚未启动，已恢复原配置并尝试恢复原服务。\n' >&2
     else

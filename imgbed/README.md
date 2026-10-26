@@ -46,6 +46,38 @@ nginx 模板使用 `http2 on`，需要 nginx >= 1.25.1。默认应用内存上�
 
 ## 2. 初始化与安装
 
+### 保留旧图片链接时先迁移
+
+继续使用 `img.thpvip.xyz` 且要保留旧图片时，先迁移整个数据目录与原部署 `.env`，再在新服务器启动。SQLite 保存图片索引、渠道和认证设置；即使图片在外部 S3/Telegram，也需要数据库中的原文件映射。保留原 `AI_CONFIG_SECRET`，使已有加密配置仍可读取。
+
+先在旧服务器确认实际镜像、数据挂载和数据量。完成新机空间、传输方式和恢复路径准备后，再进入正式迁移窗口：
+
+```bash
+# 旧服务器的 server-ops 仓库目录；此步骤会暂停旧图床。
+git pull --ff-only origin main
+sudo bash imgbed/backup.sh --keep-stopped
+```
+
+该模式在成功后保持旧服务停止，确保转移期间没有新上传遗漏；备份失败会尝试恢复原服务。旧链接会在维护窗口暂时不可用，因此应先准备好传输和新机恢复步骤。把输出的完整备份目录（`data.tar.gz`、`deployment.env`、`image`、`SHA256SUMS`）安全转移到新机；备份含存储凭据和密钥，不要发到聊天。
+
+新机使用备份对应的同一镜像恢复整个 app 目录和原 `.env`。先通过本机或 SSH 隧道检查管理员登录、存储渠道、旧图片路径及新上传，确认后才切换 DNS。旧机的数据和备份保留到迁移验收完成。外部 Bucket/Telegram 文件保持原位；本地 `r2/` 对象必须随 app 目录转移。
+
+若取消迁移，需要恢复旧机服务时，在旧机 `server-ops/imgbed` 目录执行：
+
+```bash
+sudo docker compose --env-file .env up -d --no-recreate --no-deps --pull never --wait --wait-timeout 180 imgbed
+```
+
+新 CentOS 9 主机复用公共 Nginx 接入；待数据验收及 DNS 切换完成后，从新机 `server-ops` 根目录执行：
+
+```bash
+sudo bash nginx/add-site.sh --domain img.thpvip.xyz --upstream http://127.0.0.1:7658 --email 你的证书通知邮箱
+```
+
+公共入口兼容发行版 Nginx。本文原有 `imgbed/setup-nginx.sh` 使用独立模板，仍要求 Nginx >= 1.25.1。
+
+### 全新部署
+
 ```bash
 cd /opt/server-ops/imgbed
 # 首版已公开发布；安装会解析并固定镜像摘要：
@@ -143,6 +175,7 @@ Class A `$4.50/百万次`，Class B `$0.36/百万次`，R2 公网出站流量免
 
 ```bash
 bash backup.sh
+# 正式迁移时成功后保持暂停：bash backup.sh --keep-stopped
 # 用实际成功发布的新版本替换：
 bash update.sh ghcr.io/haipengtian/cloudflare-imgbed:2.7.7-custom.2
 bash status.sh
