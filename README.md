@@ -1,6 +1,6 @@
 # server-ops
 
-服务器 `xiguapier`（AlmaLinux 10，Docker + 主机 nginx）上自部署服务的部署文件。不含任何密钥：密码、令牌都只在服务器本地生成和保存。
+自部署服务的部署文件，现有服务运行于服务器 `xiguapier`（AlmaLinux 10，Docker + 主机 nginx）。公共 nginx 工具也用于新 CentOS Stream 9 主机。不含任何密钥：密码、令牌都只在服务器本地生成和保存。
 
 ## 约定
 
@@ -8,6 +8,17 @@
 - 应用容器只发布到 `127.0.0.1:<端口>`，由主机 nginx 统一做 HTTPS 和反向代理（80/443 只有 nginx 在用）
 - 证书用 certbot webroot 签发，验证目录 `/var/www/certbot`，续期由 certbot 自带定时任务负责
 - nginx 站点配置放 `/etc/nginx/conf.d/<域名>.conf`；改动后先 `nginx -t` 再 `systemctl reload nginx`
+
+## 公共 HTTPS 入口
+
+新服务器先安装环境，再给应用添加域名；完整参数和 HTTPS 后端用法见 [nginx/](nginx/)。
+
+```bash
+sudo bash nginx/install.sh
+sudo bash nginx/add-site.sh --domain vpn.thpvip.xyz --upstream http://127.0.0.1:8888 --email 你的邮箱
+```
+
+8888 的示例按 HTTP 后端填写，实际协议需先确认。已有服务继续使用各自的 `setup-nginx.sh`。
 
 ## 服务
 

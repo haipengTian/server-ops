@@ -1,0 +1,55 @@
+# Managed by server-ops/nginx
+map $http_upgrade $__CONNECTION_VAR__ {
+    default upgrade;
+    '' close;
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name __DOMAIN__;
+
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+        default_type text/plain;
+    }
+    location / { return 301 https://__DOMAIN__$request_uri; }
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name __DOMAIN__;
+    ssl_certificate /etc/letsencrypt/live/__DOMAIN__/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/__DOMAIN__/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    client_max_body_size 128m;
+
+    location / {
+        proxy_pass __UPSTREAM__;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Port $server_port;
+        proxy_set_header CF-Connecting-IP "";
+        proxy_set_header True-Client-IP "";
+        proxy_set_header X-CDN-Client-IP "";
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $__CONNECTION_VAR__;
+        proxy_buffering off;
+        proxy_request_buffering off;
+        proxy_read_timeout 1h;
+        proxy_send_timeout 1h;
+        proxy_redirect off;
+        # BEGIN UPSTREAM TLS
+        proxy_ssl_server_name on;
+        proxy_ssl_name __SSL_NAME__;
+        proxy_ssl_verify __SSL_VERIFY__;
+        proxy_ssl_trusted_certificate __UPSTREAM_CA__;
+        proxy_ssl_verify_depth 4;
+        # END UPSTREAM TLS
+    }
+}
