@@ -53,7 +53,9 @@ case "$cmd" in
       if [[ " $* " != *' --status running '* || $(cat "$SIM/running") == 1 ]]; then echo "$service"; fi
     fi ;;
   stop) echo "stop $*" >> "$SIM/events"; echo 0 > "$SIM/running" ;;
-  create) echo create >> "$SIM/events" ;;
+  create)
+    [[ " $* " != *' --no-deps '* ]] || { echo 'unknown flag: --no-deps' >&2; exit 94; }
+    echo create >> "$SIM/events" ;;
   pull) echo pull >> "$SIM/events"; [[ ${FAIL:-} != pull ]] ;;
   up)
     if [[ $* == --help ]]; then echo --wait-timeout; exit; fi

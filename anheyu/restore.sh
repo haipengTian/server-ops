@@ -65,7 +65,7 @@ ENV_FILE="$DEPLOY_ROOT/.env"
 COMPOSE_FILE="$DEPLOY_ROOT/docker-compose.prod.yml"
 IMAGES_FILE="$DEPLOY_ROOT/docker-compose.images.yml"
 target_started=true
-compose create --no-deps redis
+compose create redis
 docker run --rm --network none --mount type=volume,source=anheyu_redisdata,target=/data \
   -v "$backup:/migration:ro,Z" --entrypoint sh "$redis_image" \
   -c 'cp /migration/redis.rdb /data/dump.rdb && chown redis:redis /data/dump.rdb'
