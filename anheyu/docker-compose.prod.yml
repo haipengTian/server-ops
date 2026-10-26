@@ -1,0 +1,63 @@
+# 迁移编排：复用 server-ops/nginx 的公共 HTTPS 入口，
+# 应用只监听本机回环地址，不直接暴露到公网
+name: anheyu
+
+services:
+  anheyu:
+    image: ghcr.io/haipengtian/anheyu-app:${ANHEYU_TAG:-custom}
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - ANHEYU_DATABASE_TYPE=postgres
+      - ANHEYU_DATABASE_HOST=postgres
+      - ANHEYU_DATABASE_PORT=5432
+      - ANHEYU_DATABASE_USER=anheyu
+      - ANHEYU_DATABASE_NAME=anheyu
+      - ANHEYU_DATABASE_PASSWORD=${ANHEYU_DATABASE_PASSWORD:?在 .env 中设置}
+      - ANHEYU_REDIS_ADDR=redis:6379
+      - ANHEYU_REDIS_PASSWORD=${ANHEYU_REDIS_PASSWORD:?在 .env 中设置}
+      - REVALIDATE_TOKEN=${REVALIDATE_TOKEN:?在 .env 中设置}
+    volumes:
+      - ./data:/anheyu/data:Z
+      - ./themes:/anheyu/themes:Z
+      - ./static:/anheyu/static:Z
+      - ./backup:/anheyu/backup:Z
+    ports:
+      - "127.0.0.1:${ANHEYU_PORT:-8091}:8091"
+
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=anheyu
+      - POSTGRES_DB=anheyu
+      - POSTGRES_PASSWORD=${ANHEYU_DATABASE_PASSWORD:?在 .env 中设置}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U anheyu -d anheyu"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    command: redis-server --requirepass ${ANHEYU_REDIS_PASSWORD:?在 .env 中设置}
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping | grep PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    environment:
+      - REDIS_PASSWORD=${ANHEYU_REDIS_PASSWORD}
+
+volumes:
+  pgdata:
+  redisdata:

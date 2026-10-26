@@ -1,0 +1,25 @@
+name: AnHeYu migration checks
+
+on:
+  push:
+    paths: ['anheyu/**', '.github/workflows/anheyu-checks.yml']
+  pull_request:
+    paths: ['anheyu/**', '.github/workflows/anheyu-checks.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - name: Shell syntax and lint
+        run: |
+          find anheyu -name '*.sh' -print0 | xargs -0 -n1 bash -n
+          shellcheck -P SCRIPTDIR -x anheyu/*.sh anheyu/tests/*.sh
+      - name: Isolated migration and failure tests
+        run: bash anheyu/tests/run.sh
+      - name: Real PostgreSQL, Redis and blog migration
+        run: sudo bash anheyu/tests/container.sh
