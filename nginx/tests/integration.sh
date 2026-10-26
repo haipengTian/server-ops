@@ -6,6 +6,8 @@ ROOT=$(cd -- "$(dirname -- "$0")/.." && pwd)
 source "$ROOT/lib.sh"
 NGINX_BIN=${1:-nginx}
 require_commands "$NGINX_BIN" curl openssl python3
+# 后面的冲突测试会定义 nginx 包装函数，先固定外部可执行文件，避免命令名递归。
+NGINX_BIN=$(command -v -- "$NGINX_BIN")
 TEST_ROOT=$(mktemp -d /tmp/server-ops-nginx-integration-XXXXXXXX)
 NGINX_PID=''
 cleanup() {
