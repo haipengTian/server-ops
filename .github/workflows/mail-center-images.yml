@@ -1,0 +1,95 @@
+name: Mail Center deployment and SMTP image
+
+on:
+  push:
+    branches: [main]
+    tags: ['mail-center-v*']
+    paths: ['mail-center/**', '.github/workflows/mail-center-images.yml']
+  pull_request:
+    paths: ['mail-center/**', '.github/workflows/mail-center-images.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mail-center-smtp-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Deployment regression checks
+        run: bash mail-center/tests/run.sh
+      - name: Validate pull-only Compose
+        run: |
+          set -euo pipefail
+          cp mail-center/.env.example mail-center/.env
+          trap 'rm -f mail-center/.env' EXIT
+          password=$(openssl rand -hex 32)
+          echo "::add-mask::$password"
+          sed -i "s/^POSTGRES_PASSWORD=$/POSTGRES_PASSWORD=$password/" mail-center/.env
+          docker compose --env-file mail-center/.env -f mail-center/compose.yaml --profile smtp config --quiet
+
+  smtp-image:
+    needs: checks
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Select image and release tag
+        id: release
+        env:
+          RELEASE_REF: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          echo "image=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/mail-center-smtp" >> "$GITHUB_OUTPUT"
+          echo "sha_tag=sha-${GITHUB_SHA:0:12}" >> "$GITHUB_OUTPUT"
+          if [[ $GITHUB_EVENT_NAME == push && $GITHUB_REF == refs/tags/mail-center-v* ]]; then
+            version=${RELEASE_REF#mail-center-}
+            [[ $version =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9_.-]+)?$ ]]
+            echo "version=$version" >> "$GITHUB_OUTPUT"
+            echo 'publish=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'publish=false' >> "$GITHUB_OUTPUT"
+          fi
+      - uses: docker/setup-buildx-action@v4
+      - name: Build SMTP image for verification
+        uses: docker/build-push-action@v7
+        with:
+          context: mail-center/smtp
+          platforms: linux/amd64
+          load: true
+          provenance: false
+          tags: mail-center-smtp-ci:local
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=mail-center-smtp
+          cache-to: type=gha,mode=max,scope=mail-center-smtp
+      - name: Verify SMTP STARTTLS, routing and relay restrictions
+        run: bash mail-center/tests/smtp-smoke.sh mail-center-smtp-ci:local
+      - uses: docker/login-action@v4
+        if: steps.release.outputs.publish == 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish verified SMTP image
+        if: steps.release.outputs.publish == 'true'
+        env:
+          IMAGE: ${{ steps.release.outputs.image }}
+          VERSION: ${{ steps.release.outputs.version }}
+          SHA_TAG: ${{ steps.release.outputs.sha_tag }}
+        run: |
+          set -euo pipefail
+          docker tag mail-center-smtp-ci:local "$IMAGE:$VERSION"
+          docker tag mail-center-smtp-ci:local "$IMAGE:$SHA_TAG"
+          docker push "$IMAGE:$VERSION"
+          docker push "$IMAGE:$SHA_TAG"
+          reference=$(docker image inspect --format '{{index .RepoDigests 0}}' "$IMAGE:$VERSION")
+          echo "Deploy with MAIL_CENTER_SMTP_IMAGE=$reference" >> "$GITHUB_STEP_SUMMARY"

@@ -23,3 +23,12 @@ cliproxyapi/**/__pycache__/
 pansou/.env.*
 !pansou/.env.example
 pansou/.operation.lock
+
+mail-center/.env.*
+!mail-center/.env.example
+mail-center/.operation.lock
+mail-center/.restore-*/
+mail-center/backups/
+mail-center/dist/
+mail-center/sources/
+mail-center/tools/
