@@ -71,3 +71,10 @@
 - 已发布 `ghcr.io/haipengtian/mail-center-ui:v0.1.3`，精确引用为 `ghcr.io/haipengtian/mail-center-ui@sha256:a0f4cf140fc42535b516ce79511996646297045f0f967160c62853ea15d82c6b`。API v0.1.1、SMTP v0.1.0 不变。
 - 紫色信封图标复用于标签页、登录页和侧栏；SVG 包含收信动画及减少动态效果规则，另提供 16/32/48 像素 ICO 与 180 像素 Apple 图标。已目视检查静态图形及 16 像素渲染；本地预览服务及浏览器文件预览分别受环境策略和 URL 策略限制，网页内动画尚未完成实际浏览器验收，升级后由用户确认。部分浏览器标签页静止属于兼容行为。
 - README 的 Web 升级命令已更新为 v0.1.3，包含 v0.1.2 收取与自动更新功能；未连接或更改服务器。
+
+## Web v0.1.4：未读邮件点击闪动（2026-10-29）
+
+- Web 提交 `0a36175` / tag `v0.1.4` 的 [发布工作流](https://github.com/haipengTian/mail-center-ui/actions/runs/40743235146) 已 completed / success。固定 Node 22.22.0 下的 35 项测试、TypeScript、生产镜像构建和页面/静态资源/图标访问检查通过。
+- 已发布 `ghcr.io/haipengtian/mail-center-ui:v0.1.4`，精确引用为 `ghcr.io/haipengtian/mail-center-ui@sha256:acc09ad781c6dc1d125285df782b2c5253d7ee029570ea3dd906adddce29bb0b`。API v0.1.1、SMTP v0.1.0 不变，不需要再次重解析。
+- 根因是自动标为已读后复用了带骨架屏的首次/筛选加载，卸载列表造成闪动。已拆为静默刷新，保留现有行和阅读正文。3 项 JSDOM + React DOM 组件测试先复现失败，再验证慢请求期间行节点与滚动位置保留、未读页移除已读项但保留正文和路由、标为未读不重挂列表。
+- 独立审查发现最初新增的 jsdom 30 与固定 Node 不兼容，已精确固定为 jsdom 26.1.0 / @types/jsdom 21.1.7，并由上述发布 CI 验证。README 升级命令已更新为 v0.1.4；实际服务器浏览器点击由用户升级后确认，本轮未连接服务器。
