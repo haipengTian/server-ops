@@ -104,6 +104,28 @@ Test-NetConnection mx.thpvip.xyz -Port 25
 
 ## 更新、备份与恢复
 
+### 从 v0.1.0 升级到 v0.1.1
+
+这次更新 API 和 Web，SMTP 仍使用 v0.1.0。修复缺少 To 头邮件导致同步卡住、中文发件人编码与正文排版，并显示同步失败的阶段和原因类型。两个 v0.1.1 发布工作流成功后，在现有部署目录执行：
+
+```bash
+cd /opt/server-ops/mail-center
+bash backup.sh &&
+sed -i \
+  -e 's|^MAIL_CENTER_API_IMAGE=.*|MAIL_CENTER_API_IMAGE=ghcr.io/haipengtian/mail-center:v0.1.1|' \
+  -e 's|^MAIL_CENTER_WEB_IMAGE=.*|MAIL_CENTER_WEB_IMAGE=ghcr.io/haipengtian/mail-center-ui:v0.1.1|' .env &&
+bash install.sh &&
+docker compose exec -T api /app/mail-reparse &&
+docker compose exec -T api /app/mail-reparse --apply &&
+bash status.sh
+```
+
+备份成功后才会更新；只替换两条镜像配置，保留现有密码、域名与数据。`mail-reparse` 先检查原始邮件，再重建已导入邮件的显示字段，不修改已读、附件、ID 或 Telegram 队列。失败数不为 0 时命令会停下，保留对应邮件原状，检查原始文件后再重试。
+
+刷新浏览器，确认侧栏版本 0.1.1。进入邮箱账号页点一次“立即同步”；如仍报错，记录新的完整提示，或查看 `docker compose logs --tail 80 api`。新版同步日志仅记录账号 ID、游标和安全错误分类，旧版通用错误不能用来确认 QQ 限流。
+
+### 其他版本更新
+
 Actions 新版本发布成功后，先备份，再编辑 `.env` 的镜像引用并运行 `install.sh`。如果更新 SMTP 镜像，再执行 `enable-smtp.sh 证书联系邮箱`；该命令会复用有效证书并重新创建 SMTP 服务。
 
 ```bash

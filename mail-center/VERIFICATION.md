@@ -44,3 +44,16 @@
 - Web 测试、TypeScript、生产镜像构建、登录页、Telegram 设置页和打包 JavaScript 资源检查通过。首次 setup-node 自动缓存先于 Corepack 调用 pnpm 失败，关闭自动缓存后通过；未改页面样式。
 - SMTP 部署回归、Compose 配置、镜像构建、STARTTLS、实际转发投递及拒绝外部/子域名收件通过。
 - 镜像摘要取自发布工作流的 Summary，未重复计算文件哈希。GitHub 包详情页本次返回 HTTP 500，未完成其界面的访问权限复核；未更改包权限。服务器实际拉取权限由用户在 SSH 终端登录 GHCR 后验证。
+
+## v0.1.1 同步与阅读修复（2026-10-29）
+
+用户已在目标服务器安装 v0.1.0；截图确认网页、API 和数据库健康，已登录并导入 QQ 邮件。以上“尚未部署”为早期记录。下列两个新版本发布工作流已 completed / success：
+
+| 服务 | 版本与提交 | Actions | 镜像摘要 |
+|---|---|---|---|
+| API | v0.1.1 / 82d4bb2 | [发布运行](https://github.com/haipengTian/mail-center/actions/runs/40731204834) | `ghcr.io/haipengtian/mail-center@sha256:fa7e148bbec6e9994056e97425ce879a27cdd0055476f8405b33019da0902c40` |
+| Web | v0.1.1 / f303db2 | [发布运行](https://github.com/haipengTian/mail-center-ui/actions/runs/40731640680) | `ghcr.io/haipengtian/mail-center-ui@sha256:2da6844d5a77b32d4e4fa1ff970d5b33d58939d107555d0587c03dad333cd21f` |
+
+- API 工作流通过全测试、PostgreSQL 集成、go vet、镜像构建、收信/登录/重启检查，并在容器里实际运行 mail-reparse 检查及 --apply。单元测试复现并修复缺 To 头导致入库失败、中文地址重编码和安全 HTML 样式/链接丢失。重解析测试确认不改已读、附件、ID 或推送队列。
+- Web 工作流通过 24 项测试、TypeScript、生产镜像构建和页面/静态资源容器检查。本机隔离浏览器实际验证 1440×1000 桌面与 390×844 手机、正文切换与已读操作，沿用 credit-ui 全局样式。
+- SMTP 保持 v0.1.0。升级及旧邮件修复命令见 README，尚需用户在服务器执行；本轮未登录服务器。本次 QQ 失败的实际原因需升级后复测确认，不从旧版通用错误推定限流。
