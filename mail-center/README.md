@@ -104,6 +104,22 @@ Test-NetConnection mx.thpvip.xyz -Port 25
 
 ## 更新、备份与恢复
 
+### 收件箱自动更新：Web v0.1.2
+
+已有 API v0.1.1 的部署，这次只升级 Web 到 v0.1.2；API 和 SMTP 镜像保持不变，无需再次重解析旧邮件。新增“收取邮件”按钮：当前邮箱只收取对应账号，全部邮件页收取所有已启用账号，暂停账号保持暂停。页面在前台每 5 秒更新本地列表，后台仍约每分钟连接外部邮箱收取，不是 IMAP IDLE 实时推送。
+
+确认 v0.1.2 发布工作流成功后执行：
+
+```bash
+cd /opt/server-ops/mail-center
+bash backup.sh &&
+sed -i 's|^MAIL_CENTER_WEB_IMAGE=.*|MAIL_CENTER_WEB_IMAGE=ghcr.io/haipengtian/mail-center-ui:v0.1.2|' .env &&
+bash install.sh &&
+bash status.sh
+```
+
+刷新浏览器确认版本 0.1.2，进入已连接邮箱，点“收取邮件”，检查收取中、完成时间及新邮件出现。也可从 QQ 等原邮箱收到一封新信后等待后台收取，确认页面无需手动刷新便更新。暂停或仅 SMTP 收件的邮箱显示“刷新列表”；失败会显示原因与邮箱账号页入口。若仍使用 API v0.1.0，先按下一节完成 v0.1.1 升级。
+
 ### 从 v0.1.0 升级到 v0.1.1
 
 这次更新 API 和 Web，SMTP 仍使用 v0.1.0。修复缺少 To 头邮件导致同步卡住、中文发件人编码与正文排版，并显示同步失败的阶段和原因类型。两个 v0.1.1 发布工作流成功后，在现有部署目录执行：

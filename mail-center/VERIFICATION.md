@@ -57,3 +57,10 @@
 - API 工作流通过全测试、PostgreSQL 集成、go vet、镜像构建、收信/登录/重启检查，并在容器里实际运行 mail-reparse 检查及 --apply。单元测试复现并修复缺 To 头导致入库失败、中文地址重编码和安全 HTML 样式/链接丢失。重解析测试确认不改已读、附件、ID 或推送队列。
 - Web 工作流通过 24 项测试、TypeScript、生产镜像构建和页面/静态资源容器检查。本机隔离浏览器实际验证 1440×1000 桌面与 390×844 手机、正文切换与已读操作，沿用 credit-ui 全局样式。
 - SMTP 保持 v0.1.0。升级及旧邮件修复命令见 README，尚需用户在服务器执行；本轮未登录服务器。本次 QQ 失败的实际原因需升级后复测确认，不从旧版通用错误推定限流。
+
+## Web v0.1.2：主动收取与列表自动更新（2026-10-29）
+
+- Web 提交 `30ee9c7` / tag `v0.1.2` 的 [发布工作流](https://github.com/haipengTian/mail-center-ui/actions/runs/40735695872) 已 completed / success：30 项测试、TypeScript、生产镜像构建及页面/静态资源检查通过。
+- 已发布 `ghcr.io/haipengtian/mail-center-ui:v0.1.2`，Summary 的精确引用为 `ghcr.io/haipengtian/mail-center-ui@sha256:d3a1e8854ca7f558e02602c49e25c8f3abb6623ce86b428a6812dc90880f341a`。API 保持 v0.1.1，SMTP 保持 v0.1.0；无需运行 mail-reparse。
+- 隔离内存 API 与虚构账号的实际浏览器验收覆盖当前邮箱收取、外部触发同步后列表自动出现新信、全局部分失败、暂停与 SMTP-only 行为，以及筛选/阅读状态保留。1440×1000 桌面和 390×844 手机布局正常，手机无横向溢出，浏览器无 error/warn；沿用 credit-ui 样式。记录与截图位于前端 VERIFICATION.md 和 playwright-artifacts/mail-sync-*.png。
+- README 已补充仅更新 Web 的备份/拉取命令。本轮未连接服务器；升级后真实 QQ 邮件的收取及自动显示由用户验收。
