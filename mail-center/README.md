@@ -14,7 +14,7 @@ GitHub Actions 构建并验证镜像，发布到 GHCR；服务器拉取指定版
 | `haipengTian/mail-center-ui` | Next.js 网页 | `v0.1.0` | `ghcr.io/haipengtian/mail-center-ui:v0.1.0` |
 | `haipengTian/server-ops` | Postfix 收信入口 | `mail-center-v0.1.0` | `ghcr.io/haipengtian/mail-center-smtp:v0.1.0` |
 
-镜像名称根据实际 GitHub 仓库或 owner 自动生成并转为小写。上面的账号、仓库名和版本是本项目拟采用的首发名称，**只有对应 Actions 完成 success、GHCR 已有该版本后才运行服务器安装**。
+镜像名称根据实际 GitHub 仓库或 owner 自动生成并转为小写。2026-10-29 首版三个版本 tag 的 Actions 均已完成 success，表中 `v0.1.0` 镜像已发布；精确摘要和运行链接见 `VERIFICATION.md`。前后端源代码仓库均为私有。后续版本也须确认发布成功后才运行服务器安装。
 
 前后端 `.github/workflows/image.yml` 在 main 提交、PR 和手动运行时执行检查与容器验证；推送 `vX.Y.Z` tag 才发布镜像。Postfix 使用本仓库 `.github/workflows/mail-center-images.yml`，推送 `mail-center-vX.Y.Z` tag 才发布。普通 main/PR/手动检查均不发布镜像。
 

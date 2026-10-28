@@ -14,7 +14,7 @@
 
 ## 尚未完成及影响
 
-- 本机 Docker Hub 连接超时，缓存与代理下载基础镜像持续停滞，因此未完成前端 Docker 镜像和整个网关容器链路运行。现已改由 Actions 构建；首发必须先确认流水线成功、GHCR 镜像已发布，再由服务器拉取，验证同域登录、静态资源、API 和重建容器后的访问。
+- 本机 Docker Hub 连接问题阻止了最初的前端镜像验证；已通过下述 Actions 完成前端生产镜像与页面/静态资源检查。整个网关容器链路、目标服务器同域登录与容器重建后访问仍待验证。
 - 备份恢复脚本完成静态审查，完整执行受 Windows 文件权限和缺少 flock 影响，未完成数据库与文件的端到端恢复演练。生产数据投入前，应在隔离 Linux 部署中运行备份并恢复到全新目录，核对管理员、邮件、文件及加密密钥可用。
 - 主机 nginx 接入、Certbot 签发与续期、SELinux 下数据目录权限，以及供应商 / 安全组 / 防火墙的公网入站 25 尚未在目标服务器执行。
 - 真实 QQ / 网易 / Gmail 与 Telegram 仍由用户自己填写凭据后进行联调。主域名 HTTP 302 不证明真实 Bot API 调用或 IMAP 可用。
@@ -27,5 +27,20 @@
 - 生产 Compose 去除所有 build 配置，三个应用镜像必须为 GHCR 固定版本、提交号或摘要。安装先拉取，失败不启动；启动带 `--no-build --pull never`。
 - Linux 容器执行部署脚本回归通过，覆盖固定镜像限制、拒绝滚动标签、拉取失败不启动与成功后的启动参数；新 shell 脚本 Bash 语法检查和三份 workflow 的 actionlint 检查通过。
 - 含 SMTP profile 的生产 Compose 配置校验通过。轻量运维包导出成功，清单检查确认必需部署文件齐全，未包含应用源码、Dockerfile、真实 `.env`、数据或密钥。本轮 CI、拉取部署与导出配置经独立只读审查，未发现待修复问题。
-- 当前仅完成本地配置与脚本检查。新增 CI 容器验证脚本尚未在 GitHub 执行，不能视为 Actions 构建、GHCR 发布或服务器部署成功。
+- 三份容器验证脚本已在 GitHub 执行，首版镜像已发布，详见下节。用户服务器尚未部署，真实公网验收仍待执行。
 - GitHub Connector 最初返回 `Authentication Failed: Bad credentials`；用户更新令牌并重新加载后认证恢复。已按用户选择创建两个私有应用仓库并关联 remote；镜像发布结果仍须由实际 Actions 确认。
+
+## 首版发布成功（2026-10-29，Asia/Shanghai）
+
+前后端源代码已推送至 `haipengTian/mail-center`、`haipengTian/mail-center-ui` 两个私有仓库。下列三个版本 tag 的 Actions 均为 completed / success，发布了经过各自容器验证的镜像：
+
+| 服务 | 版本 tag | Actions | 部署镜像摘要 |
+|---|---|---|---|
+| API | `v0.1.0`，提交 `c49e3a7` | [发布运行](https://github.com/haipengTian/mail-center/actions/runs/40722783580) | `ghcr.io/haipengtian/mail-center@sha256:915de28317632bd54f64f4a664ecfc576f168f01a7c21cfc48b323557caf639e` |
+| Web | `v0.1.0`，提交 `3ee865a` | [发布运行](https://github.com/haipengTian/mail-center-ui/actions/runs/40723124164) | `ghcr.io/haipengtian/mail-center-ui@sha256:f30f313f7b6bdd4f911e64c5647aabe1ae08088bee130e0b82e30d7078c95d6b` |
+| SMTP | `mail-center-v0.1.0`，提交 `5af5c7e` | [发布运行](https://github.com/haipengTian/server-ops/actions/runs/40722230896) | `ghcr.io/haipengtian/mail-center-smtp@sha256:3f6640292780e6c0ed1264f4e194cc10fb7186a0e79136dc5f84b6dded5f0de7` |
+
+- API 测试、PostgreSQL 集成测试、go vet、镜像构建，以及未登录拒绝访问、管理员初始化、登录、SMTP 入库、重启后原会话与邮件保留均通过。首次 smoke 因 Docker 重启重新分配随机宿主端口而失败，修正脚本重新读取端口后通过；未改业务逻辑。
+- Web 测试、TypeScript、生产镜像构建、登录页、Telegram 设置页和打包 JavaScript 资源检查通过。首次 setup-node 自动缓存先于 Corepack 调用 pnpm 失败，关闭自动缓存后通过；未改页面样式。
+- SMTP 部署回归、Compose 配置、镜像构建、STARTTLS、实际转发投递及拒绝外部/子域名收件通过。
+- 镜像摘要取自发布工作流的 Summary，未重复计算文件哈希。GitHub 包详情页本次返回 HTTP 500，未完成其界面的访问权限复核；未更改包权限。服务器实际拉取权限由用户在 SSH 终端登录 GHCR 后验证。
