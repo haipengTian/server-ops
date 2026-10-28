@@ -64,3 +64,10 @@
 - 已发布 `ghcr.io/haipengtian/mail-center-ui:v0.1.2`，Summary 的精确引用为 `ghcr.io/haipengtian/mail-center-ui@sha256:d3a1e8854ca7f558e02602c49e25c8f3abb6623ce86b428a6812dc90880f341a`。API 保持 v0.1.1，SMTP 保持 v0.1.0；无需运行 mail-reparse。
 - 隔离内存 API 与虚构账号的实际浏览器验收覆盖当前邮箱收取、外部触发同步后列表自动出现新信、全局部分失败、暂停与 SMTP-only 行为，以及筛选/阅读状态保留。1440×1000 桌面和 390×844 手机布局正常，手机无横向溢出，浏览器无 error/warn；沿用 credit-ui 样式。记录与截图位于前端 VERIFICATION.md 和 playwright-artifacts/mail-sync-*.png。
 - README 已补充仅更新 Web 的备份/拉取命令。本轮未连接服务器；升级后真实 QQ 邮件的收取及自动显示由用户验收。
+
+## Web v0.1.3：网站图标（2026-10-29）
+
+- Web 提交 `8d00ecd` / tag `v0.1.3` 的 [发布工作流](https://github.com/haipengTian/mail-center-ui/actions/runs/40738884973) 已 completed / success。32 项测试、TypeScript、生产镜像构建、页面/静态资源检查，以及 SVG / ICO / Apple 图标链接和资源访问均通过。
+- 已发布 `ghcr.io/haipengtian/mail-center-ui:v0.1.3`，精确引用为 `ghcr.io/haipengtian/mail-center-ui@sha256:a0f4cf140fc42535b516ce79511996646297045f0f967160c62853ea15d82c6b`。API v0.1.1、SMTP v0.1.0 不变。
+- 紫色信封图标复用于标签页、登录页和侧栏；SVG 包含收信动画及减少动态效果规则，另提供 16/32/48 像素 ICO 与 180 像素 Apple 图标。已目视检查静态图形及 16 像素渲染；本地预览服务及浏览器文件预览分别受环境策略和 URL 策略限制，网页内动画尚未完成实际浏览器验收，升级后由用户确认。部分浏览器标签页静止属于兼容行为。
+- README 的 Web 升级命令已更新为 v0.1.3，包含 v0.1.2 收取与自动更新功能；未连接或更改服务器。
