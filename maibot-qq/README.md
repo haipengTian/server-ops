@@ -47,6 +47,25 @@ bash deploy.sh status
 
 导入目标必须不存在，避免覆盖旧实例。导入只改麦麦 HTTP 监听为容器内 `0.0.0.0:8001`、适配器地址为 `snowluma:13001`；其他配置、当前 QQ 放行范围、人设和模型选择均沿用迁移时的实际值。
 
+### 通过域名访问（当前服务器）
+
+`maimai.thpvip.xyz` 和 `qqdesk.thpvip.xyz` 的 A 记录指向服务器，首次签证书先选“仅 DNS”。复用主机现有 nginx，不必重新安装或修改其他服务：
+
+```bash
+cd /opt/server-ops
+git fetch origin codex/maibot-docker
+git archive origin/codex/maibot-docker nginx | tar -x -C /opt/maibot-qq-deploy
+read -rp "证书通知邮箱：" CERT_EMAIL
+bash /opt/maibot-qq-deploy/nginx/add-site.sh \
+  --domain maimai.thpvip.xyz --upstream http://127.0.0.1:18011 --email "$CERT_EMAIL"
+```
+
+QQ 桌面接入前，按 [公共 nginx 的远程桌面认证步骤](../nginx/README.md#给远程桌面加一层网页登录密码)创建网页登录账号，再用 `--basic-auth-file /etc/nginx/qqdesk.htpasswd` 接入 `http://127.0.0.1:16081`。在上述独立部署目录中使用 `/opt/maibot-qq-deploy/nginx/add-site.sh`。
+
+打开 [麦麦后台](https://maimai.thpvip.xyz/) 或 [QQ 登录桌面](https://qqdesk.thpvip.xyz/vnc.html?autoconnect=1&resize=scale)。麦麦沿用原管理密码；QQ 桌面先输入网页账号密码，再输入原 VNC 密码并由你扫码登录。无需放开 18011、15099、16081 公网端口。
+
+### 不配置域名时使用 SSH 隧道
+
 Windows 另开一个终端建立隧道（`服务器地址`与用户名由你填写；本机原管理端口需已释放）：
 
 ```powershell

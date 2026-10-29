@@ -9,6 +9,7 @@ usage() {
 可选：--upstream-server-name 证书域名   HTTPS 后端的 SNI 和证书名称
       --upstream-ca /绝对路径/ca.pem  HTTPS 后端的可信 CA
       --upstream-insecure           显式允许回环 HTTPS 后端的自签名证书
+      --basic-auth-file /绝对路径/密码文件  为整个 HTTPS 入口启用 Basic Auth
 域名需已指向本机，公网 TCP 80/443 需可达；先执行 nginx/install.sh。
 只管理本站配置，保留请求路径，不修改代理入站、订阅服务及面板设置。
 EOF
@@ -17,10 +18,11 @@ DOMAIN='' UPSTREAM='' EMAIL='' UPSTREAM_SERVER_NAME=''
 UPSTREAM_CA=/etc/pki/tls/certs/ca-bundle.crt
 UPSTREAM_INSECURE=false
 CUSTOM_CA=false
+BASIC_AUTH_FILE=''
 while (($#)); do
   case "$1" in
     --help|-h) usage; exit 0 ;;
-    --domain|--upstream|--email|--upstream-server-name|--upstream-ca)
+    --domain|--upstream|--email|--upstream-server-name|--upstream-ca|--basic-auth-file)
       (($# >= 2)) || die "$1 缺少值"
       case "$1" in
         --domain) DOMAIN=$2 ;;
@@ -28,6 +30,7 @@ while (($#)); do
         --email) EMAIL=$2 ;;
         --upstream-server-name) UPSTREAM_SERVER_NAME=$2 ;;
         --upstream-ca) UPSTREAM_CA=$2; CUSTOM_CA=true ;;
+        --basic-auth-file) BASIC_AUTH_FILE=$2; [[ -n $BASIC_AUTH_FILE ]] || die '--basic-auth-file 不能为空' ;;
       esac
       shift 2 ;;
     --upstream-insecure) UPSTREAM_INSECURE=true; shift ;;
@@ -56,6 +59,10 @@ fi
 SSL_NAME=${UPSTREAM_SERVER_NAME:-$UPSTREAM_HOST}
 SSL_VERIFY=on
 [[ $UPSTREAM_INSECURE == false ]] || SSL_VERIFY=off
+if [[ -n $BASIC_AUTH_FILE ]]; then
+  [[ $BASIC_AUTH_FILE =~ ^/[a-zA-Z0-9_./-]+$ && $BASIC_AUTH_FILE != *'..'* && -f $BASIC_AUTH_FILE && -r $BASIC_AUTH_FILE && -s $BASIC_AUTH_FILE ]] ||
+    die '--basic-auth-file 必须是可读非空普通文件的绝对路径，不能含空格或配置字符'
+fi
 require_root
 require_commands nginx certbot curl getent systemctl flock
 [[ -d $CONF_DIR ]] || die 'nginx 配置目录不存在，请先运行 install.sh'
