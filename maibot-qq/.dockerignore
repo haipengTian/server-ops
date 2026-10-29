@@ -1,0 +1,6 @@
+**
+!Dockerfile
+!entrypoint.py
+!migrate.py
+!image/
+!image/**

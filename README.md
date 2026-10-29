@@ -28,5 +28,6 @@ sudo bash nginx/add-site.sh --domain vpn.thpvip.xyz --upstream http://127.0.0.1:
 | Sub2API 个人版本 | proxy.thpvip.xyz | 8088 | [sub2api/](sub2api/) |
 | CloudFlare ImgBed 个人版本 | img.thpvip.xyz | 7658 | [imgbed/](imgbed/) |
 | CLIProxyAPI 与个人管理前端 | cpa.thpvip.xyz | 8317 | [cliproxyapi/](cliproxyapi/) |
+| 麦麦 QQ 与糯糯生活照 | SSH 隧道访问 | 18011 / 15099 / 16081 | [maibot-qq/](maibot-qq/) |
 | PanSou 盘搜（新服务器） | sou.thpvip.cn | 9000 | [pansou/](pansou/) |
 | 博客（anheyu-app 二开） | blog.thpvip.xyz | 8091 | [迁移部署](anheyu/)；[应用仓库](https://github.com/haipengTian/anheyu-app/tree/custom/deploy) |

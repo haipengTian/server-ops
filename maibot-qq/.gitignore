@@ -1,0 +1,10 @@
+.env
+data/
+backups/
+dist/
+sources/
+*.tar
+*.tar.gz
+*.partial
+__pycache__/
+tests/__pycache__/

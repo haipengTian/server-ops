@@ -1,0 +1,15 @@
+{
+  "manifest_version": 2,
+  "id": "haipengtian.nuonuo-photo",
+  "version": "1.0.0",
+  "name": "糯糯生活照",
+  "description": "固定原始肖像，按明确请求生成同一角色的生活照并发送到当前聊天。",
+  "author": {"name": "haipengtian", "url": "https://github.com/haipengtian"},
+  "license": "MIT",
+  "urls": {"repository": "https://github.com/haipengtian"},
+  "i18n": {"default_locale": "zh-CN", "supported_locales": ["zh-CN"]},
+  "host_application": {"min_version": "1.3.18", "max_version": "1.3.99"},
+  "sdk": {"min_version": "2.19.0", "max_version": "2.99.99"},
+  "dependencies": [],
+  "capabilities": ["message.get_by_id", "send.image", "send.text"]
+}
