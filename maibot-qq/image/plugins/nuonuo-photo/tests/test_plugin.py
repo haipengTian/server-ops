@@ -122,7 +122,7 @@ async def test_interrupted_job_is_not_retried(plugin):
 
 def test_plugin_manifest_webui_and_factory_match_host_contract():
     # 宿主主程序源码只用于验证声明，不导入或修改生产配置。
-    host = Path(os.environ.get("MAIBOT_APP_ROOT", str(ROOT.parents[2] / "app")))
+    host = Path(os.environ.get("MAIBOT_APP_ROOT") or str(ROOT.parents[2] / "app"))
     sys.path.insert(0, str(host))
     from src.plugin_runtime.runner.manifest_validator import PluginManifest
     from src.plugin_runtime.runner.plugin_loader import PluginLoader
