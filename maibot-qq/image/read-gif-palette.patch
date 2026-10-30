@@ -1,0 +1,24 @@
+diff --git a/read_animation/frames.py b/read_animation/frames.py
+index 1379674..e9bd2ae 100644
+--- a/read_animation/frames.py
++++ b/read_animation/frames.py
+@@ -67,6 +67,7 @@ class AnimationReader:
+         """
+ 
+         self._kind = kind
++        self._source_data = data
+         self._max_scan_frames = max(1, int(max_scan_frames))
+         try:
+             self._image = Image.open(BytesIO(data))
+@@ -185,6 +186,11 @@ class AnimationReader:
+             raise AnimationReadError(f"帧序号超出范围: {index}")
+ 
+         try:
++            # Pillow can lose a palette APNG's colors when seeking backwards.
++            # Reopen the same bytes before rewinding; keep original frames/timing.
++            if self._kind == "apng" and self._image.mode == "P" and index < self._image.tell():
++                self._image.close()
++                self._image = Image.open(BytesIO(self._source_data))
+             self._image.seek(index)
+             frame = self._image.convert("RGBA")
+         except Exception as exc:

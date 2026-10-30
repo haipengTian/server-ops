@@ -37,11 +37,18 @@ require_owned() {
 }
 render() {
   local template=$1
+  local -a auth_args=()
+  if [[ -n ${BASIC_AUTH_FILE:-} ]]; then
+    auth_args=(-e "s|__BASIC_AUTH_FILE__|$BASIC_AUTH_FILE|g")
+  else
+    auth_args=(-e '/# BEGIN BASIC AUTH/,/# END BASIC AUTH/d')
+  fi
   sed -e "s|__DOMAIN__|$DOMAIN|g" \
       -e "s|__UPSTREAM__|$UPSTREAM|g" \
       -e "s|__SSL_NAME__|$SSL_NAME|g" \
       -e "s|__SSL_VERIFY__|$SSL_VERIFY|g" \
       -e "s|__UPSTREAM_CA__|$UPSTREAM_CA|g" \
+      "${auth_args[@]}" \
       "$OPS_DIR/templates/$template"
 }
 http_status_ok() { [[ $1 =~ ^[234][0-9][0-9]$ ]]; }
@@ -82,11 +89,13 @@ wait_https() {
     # 验证真实证书和域名；404/401 是受保护面板常见的正常根路径响应。
     if code=$(curl --silent --show-error --noproxy '*' --connect-timeout 2 --max-time 5 \
       --resolve "$DOMAIN:443:127.0.0.1" --output /dev/null --write-out '%{http_code}' \
-      "https://$DOMAIN/" 2> "$TRANSACTION/https-error") && http_status_ok "$code"; then
+      "https://$DOMAIN/" 2> "$TRANSACTION/https-error") && http_status_ok "$code" &&
+      { [[ -z ${BASIC_AUTH_FILE:-} ]] || [[ $code == 401 ]]; }; then
       return 0
     fi
     [[ $attempt == 10 ]] || sleep 1
   done
   cat "$TRANSACTION/https-error" >&2
+  [[ -z ${BASIC_AUTH_FILE:-} ]] || die "Basic Auth 就绪检查失败（最后匿名 HTTP ${code:-000}，预期 401），请检查密码文件权限及 nginx 错误日志"
   die "HTTPS 就绪检查失败（最后 HTTP ${code:-000}），请检查证书、站点和 nginx 错误日志"
 }

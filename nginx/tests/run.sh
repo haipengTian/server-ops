@@ -49,7 +49,9 @@ if [[ $url == https://vpn.thpvip.xyz/* ]]; then
   [[ " $* " != *' --insecure '* && " $* " != *' -k '* ]] || exit 93
   n=$(cat "$SIM/attempts"); n=$((n + 1)); echo "$n" > "$SIM/attempts"
   if [[ $MODE == wrong-cert || $MODE == delayed && $n -le 3 ]]; then exit 60; fi
-  if [[ $MODE == bad-gateway ]]; then echo 502; else echo 404; fi
+  if [[ $MODE == bad-gateway ]]; then echo 502
+  elif [[ $MODE == basic-auth ]]; then echo 401
+  else echo 404; fi
 else
   [[ $MODE != wrong-protocol ]] || exit 1
   if [[ $MODE == upstream-tls && " $* " != *' --insecure '* ]]; then exit 60; fi
@@ -143,6 +145,39 @@ cp "$CONF" "$SIM/first-site"
 run_ok site
 cmp -s "$CONF" "$SIM/first-site" || fail '重复接入产生不同配置'
 echo 'PASS: 重复接入同一站点保持配置稳定'
+
+fixture basic-auth
+AUTH_FILE="$SIM/etc/nginx/qqdesk.htpasswd"
+echo 'fixture:hashed-password' > "$AUTH_FILE"
+run_ok site --basic-auth-file "$AUTH_FILE"
+grep -Fq "auth_basic_user_file $AUTH_FILE;" "$CONF" || fail '未配置密码文件'
+grep -Fq 'auth_basic "Restricted";' "$CONF" || fail '未启用认证'
+grep -Fq 'proxy_set_header Authorization "";' "$CONF" || fail '网关密码会泄露给后端'
+cp "$CONF" "$SIM/first-site"
+run_ok site --basic-auth-file "$AUTH_FILE"
+cmp -s "$CONF" "$SIM/first-site" || fail '认证站点重复接入不稳定'
+unchanged_other
+echo 'PASS: 可选 Basic Auth 渲染稳定，不转发网关认证凭据，HTTPS 接受 401'
+
+fixture normal
+for auth_file in relative-path '/tmp/bad;path' "$SIM/missing" "$SIM/etc/nginx"; do
+  run_fail site --basic-auth-file "$auth_file"
+done
+touch "$SIM/empty-passwords"
+run_fail site --basic-auth-file "$SIM/empty-passwords"
+[[ ! -e $CONF && ! -s $SIM/events ]] || fail '无效密码文件产生了系统副作用'
+echo 'PASS: 认证文件必须是安全绝对路径且为可读非空普通文件'
+
+fixture normal
+echo fixture > "$SIM/passwords"
+run_fail site --basic-auth-file "$SIM/passwords"
+[[ ! -e $CONF ]] || fail '启用认证后未阻止非 401 的错误入口'
+echo 'PASS: 启用认证的站点必须实测返回匿名 401，否则回退'
+
+fixture normal
+run_ok site
+! grep -Eq 'auth_basic|proxy_set_header Authorization' "$CONF" || fail '未启用认证的原调用被改变'
+echo 'PASS: 不传认证选项时保留原有调用契约'
 
 fixture normal
 echo unmanaged-site > "$CONF"
