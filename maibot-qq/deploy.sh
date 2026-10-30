@@ -16,7 +16,11 @@ load_env() {
   image_ok "$MAIBOT_IMAGE"
   [[ $MAIBOT_DATA_DIR == /opt/maibot-qq ]] || die 'Expected data directory /opt/maibot-qq.'
 }
-compose() { docker compose --env-file "$OPS_DIR/.env" -f "$OPS_DIR/compose.yaml" "$@"; }
+compose() {
+  local extra=()
+  [[ ! -f "$OPS_DIR/compose.qq-face.yaml" ]] || extra=(-f "$OPS_DIR/compose.qq-face.yaml")
+  docker compose --env-file "$OPS_DIR/.env" -f "$OPS_DIR/compose.yaml" "${extra[@]}" "$@"
+}
 command -v docker >/dev/null || die 'Install Docker with the Compose v2 plugin first.'
 docker compose version >/dev/null
 [[ $(docker info --format '{{.Architecture}}') == x86_64 ]] || die 'This image is built for the existing amd64 server.'
@@ -67,6 +71,14 @@ case "$command" in
     curl --fail --silent --show-error "http://127.0.0.1:${MAIBOT_WEB_PORT}/api/webui/health"
     printf '\n'
     ;;
+  update|rollback|restore)
+    [[ $# == 1 ]] || die "Usage: bash deploy.sh $command IMAGE_OR_BACKUP"
+    exec python3 "$OPS_DIR/release.py" --ops "$OPS_DIR" "$command" "$1"
+    ;;
+  portable-backup)
+    [[ $# == 0 ]] || die 'Usage: bash deploy.sh portable-backup'
+    exec python3 "$OPS_DIR/release.py" --ops "$OPS_DIR" backup
+    ;;
   stop)
     load_env
     compose stop
@@ -84,6 +96,6 @@ case "$command" in
     printf 'Backup saved: %s\nServices remain stopped. Restart with: bash deploy.sh start --local-stopped\n' "$backup"
     ;;
   *)
-    die 'Commands: prepare IMAGE | import ARCHIVE | start --local-stopped | status | stop | backup'
+    die 'Commands: prepare IMAGE | import ARCHIVE | start --local-stopped | status | stop | backup | update IMAGE | rollback TRANSACTION | portable-backup | restore ARCHIVE'
     ;;
 esac

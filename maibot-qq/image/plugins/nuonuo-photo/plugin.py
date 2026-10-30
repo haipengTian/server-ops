@@ -9,12 +9,12 @@ from uuid import uuid4
 import asyncio
 import base64
 import json
-import re
 
 from maibot_sdk import API, MaiBotPlugin, Tool
 
 from .config import PhotoConfig
 from .images import ImageAPI, ImageError, preview_data_url
+from .intent import SYSTEM_PROMPT, parse_intent, text_of
 
 
 class NuonuoPhotoPlugin(MaiBotPlugin):
@@ -34,6 +34,15 @@ class NuonuoPhotoPlugin(MaiBotPlugin):
         return self.ctx.paths.data_dir
 
     async def _save(self):
+        job = self.state["job"]
+        if job.get("id"):
+            # 兼容旧状态：用原始请求记录确定所属聊天，不能把全局最近任务泄露到别的聊天。
+            if not job.get("stream_id"):
+                for key, job_id in self.state["requests"].items():
+                    if job_id == job["id"]:
+                        job["stream_id"] = key.rsplit(":", 1)[0]
+                        break
+            self.state.setdefault("jobs", {})[job["id"]] = dict(job)
         payload = json.dumps(self.state, ensure_ascii=False, indent=2)
 
         def write():
@@ -51,6 +60,7 @@ class NuonuoPhotoPlugin(MaiBotPlugin):
             return json.loads(path.read_text(encoding="utf-8")) if path.exists() else self.state
 
         self.state = await asyncio.to_thread(load)
+        self.state.setdefault("jobs", {})
         if self.state["job"].get("status") == "running":
             self.state["job"].update(status="interrupted", error="上次生成因插件重载中断，未自动重试。")
             await self._save()
@@ -61,6 +71,8 @@ class NuonuoPhotoPlugin(MaiBotPlugin):
         if self.state["job"].get("output"):
             raw = await asyncio.to_thread((self.data_dir / self.state["job"]["output"]).read_bytes)
             self._latest_preview = await asyncio.to_thread(preview_data_url, raw)
+        # 记录旧版最后一个任务的归属，旧请求继续去重。
+        await self._save()
 
     async def on_unload(self):
         if self._task is not None and not self._task.done():
@@ -79,18 +91,19 @@ class NuonuoPhotoPlugin(MaiBotPlugin):
         async with self._lock:
             request_key = f"{stream_id}:{request_id}" if request_id else ""
             if request_key and request_key in self.state["requests"]:
-                return {"success": True, "content": "这条消息已有生成任务，请勿重复生成。", "stop_after_execution": True}
+                return self._duplicate_result(request_key)
             if self._task is not None and not self._task.done():
                 return {"success": False, "error": "已有一张照片正在生成，请等它完成。"}
             if not self.config.images.api_key:
                 return {"success": False, "error": "请先在插件设置中配置图片接口。"}
             if kind == "life" and not self.state["reference"]:
                 return {"success": False, "error": "还没有确认糯糯的固定肖像，请先在生活照工作室确认形象。"}
-            if len(scene) > 1500 or (kind == "life" and not scene.strip()):
-                return {"success": False, "error": "请用 1–1500 字描述照片场景。"}
+            if len(scene) > 1500 or (kind in {"life", "general"} and not scene.strip()):
+                return {"success": False, "error": "请用 1–1500 字描述图片内容。"}
             job_id = uuid4().hex
             reference = self.state["reference"] if kind == "life" else ""
             self.state["job"] = {"id": job_id, "kind": kind, "scene": scene, "status": "running",
+                                 "stream_id": stream_id,
                                  "reference": reference, "output": "", "error": "", "sent": False,
                                  "created_at": datetime.now(timezone.utc).isoformat()}
             if request_key:
@@ -98,7 +111,8 @@ class NuonuoPhotoPlugin(MaiBotPlugin):
             await self._save()
             # 先持久化请求，再提交收费调用；重载或发送失败都不会自动生成第二次。
             self._task = asyncio.create_task(self._perform(dict(self.state["job"]), stream_id))
-            return {"success": True, "content": "已开始生成糯糯的生活照，完成后会发到当前聊天；不要重复调用。" if stream_id
+            label = "糯糯的照片" if kind == "life" else "图片"
+            return {"success": True, "content": f"已开始生成{label}。完成后尝试发送到当前聊天；催进度时调用 get_image_status 查询，不要仅凭本次开始通知判断仍在运行。同一条消息不要重复提交；任务结束后用户用新消息明确要求重画，可以再次生成。" if stream_id
                     else "已开始生成，完成后会显示预览。", "job_id": job_id, "stop_after_execution": True}
 
     async def _perform(self, job: dict, stream_id: str):
@@ -109,6 +123,9 @@ class NuonuoPhotoPlugin(MaiBotPlugin):
                           "plain warm gray background, candid realistic photography, no text, no collage. "
                           + self.config.character.portrait_description)
                 reference = None
+            elif job["kind"] == "general":
+                reference = None
+                prompt = job["scene"]
             else:
                 reference = await asyncio.to_thread((self.data_dir / job["reference"]).read_bytes)
                 prompt = ("Create a photorealistic everyday photo of the SAME ADULT WOMAN in the reference image. "
@@ -129,7 +146,8 @@ class NuonuoPhotoPlugin(MaiBotPlugin):
             if stream_id:
                 # 已经有图片时只尝试发送一次；发送异常不重新提交生图。
                 try:
-                    sent = await self.ctx.send.image(base64.b64encode(raw).decode("ascii"), stream_id, return_details=True)
+                    sent = await self.ctx.send.image(base64.b64encode(raw).decode("ascii"), stream_id,
+                        return_details=True, sync_to_maisaka_history=True)
                     job["sent"] = bool(sent["sent"])
                     job["message_id"] = sent["message_id"]
                     if not job["sent"]:
@@ -148,13 +166,56 @@ class NuonuoPhotoPlugin(MaiBotPlugin):
             self.state["job"] = job
             await self._save()
             if stream_id:
-                with suppress(Exception):
-                    await self.ctx.send.text("这张没生成成功：" + job["error"], stream_id)
+                await self._notify_failure(job, stream_id)
         except Exception:
             # 后台任务不能静默挂在 running；技术异常只写安全状态，不回显密钥或响应正文。
             job.update(status="failed", error="生成任务处理异常，未自动重试；请检查本地插件状态。")
             self.state["job"] = job
             await self._save()
+            if stream_id:
+                await self._notify_failure(job, stream_id)
+
+    async def _notify_failure(self, job: dict, stream_id: str):
+        try:
+            sent = await self.ctx.send.text("这张没生成成功：" + job["error"] +
+                " 当前任务已结束；需要重画可以发新消息明确要求重新生成。", stream_id,
+                return_details=True, sync_to_maisaka_history=True)
+            job["failure_notified"] = isinstance(sent, dict) and bool(sent.get("sent"))
+        except Exception:
+            job["failure_notified"] = False
+        self.state["job"] = job
+        await self._save()
+
+    def _job_status(self, job: dict) -> dict:
+        status = job.get("status", "not_found")
+        labels = {"running": "正在生成", "completed": "图片已生成", "failed": "生成失败，任务已结束",
+                  "interrupted": "任务已中断", "generated_unsent": "图片已保存，但发送未确认",
+                  "not_found": "当前聊天没有可查询的生成任务"}
+        can_generate = self._task is None or self._task.done()
+        guidance = ("用户用新消息明确要求重新生成时可以调用生图工具；使用新消息编号，不能重用旧请求。"
+                    if can_generate else "当前有生成任务未结束，请等待；不要重复提交。")
+        return {"success": True, "status": status, "job_id": job.get("id", ""),
+                "error": job.get("error", ""), "sent": bool(job.get("sent")),
+                "can_generate": can_generate, "content": labels.get(status, status) + "。" + guidance}
+
+    def _duplicate_result(self, request_key: str) -> dict:
+        job_id = self.state["requests"][request_key]
+        job = self.state.get("jobs", {}).get(job_id, {})
+        if self.state["job"].get("id") == job_id:
+            job = self.state["job"]
+        result = self._job_status(job)
+        result.update(content="这条消息已提交过，未再次生成。" + result["content"], stop_after_execution=True)
+        return result
+
+    @Tool("get_image_status", description="查询当前聊天最近一次生图的真实状态和失败原因，不收费、不生成图片。用户催进度、问失败原因或要求重新生成时先查询，不能凭旧的开始通知假定仍在生成。任务结束后，用户新消息明确要求重画时可调用生图工具；同一原始消息始终防重复。",
+          parameters={})
+    async def image_status(self, stream_id: str = "", **kwargs) -> dict:
+        if not stream_id:
+            return {"success": False, "error": "需要当前聊天流。"}
+        for job in reversed(list(self.state.get("jobs", {}).values())):
+            if job.get("stream_id") == stream_id:
+                return self._job_status(job)
+        return self._job_status({})
 
     @API("photo_status", description="查看固定形象和最近一次生成结果")
     async def photo_status(self) -> dict:
@@ -192,24 +253,70 @@ class NuonuoPhotoPlugin(MaiBotPlugin):
     async def preview_life_photo(self, scene: str) -> dict:
         return await self._begin("life", scene)
 
-    @Tool("nuonuo_life_photo", description="用户明确要求糯糯的自拍、生活照或照片时，按固定肖像生成并发到当前聊天。完成前不要重复调用；不能主动生成。",
+    @API("preview_image", description="通用生图预览，不使用糯糯肖像，不发到 QQ")
+    async def preview_image(self, drawing_scene: str) -> dict:
+        return await self._begin("general", drawing_scene)
+
+    @Tool("nuonuo_life_photo", description="用户要求包含糯糯本人的图片：自拍、生活照、换装、与人或宠物合照/合影，使用固定肖像生成并发到当前聊天。按语义理解；纯绘图用 generate_image。用户要求重画时先用 get_image_status 查真实状态，任务结束后可按用户新的明确请求生成，使用新消息编号；不能因旧开始通知拒绝新请求。同一条消息不要重复提交。",
           parameters={"scene": {"type": "string", "description": "用户要求的生活场景、动作及衣服，保留糯糯外貌", "required": True},
                       "request_message_id": {"type": "string", "description": "用户明确索要照片的消息编号", "required": True}})
     async def life_photo(self, scene: str, request_message_id: str, stream_id: str = "", user_id: str = "", **kwargs) -> dict:
+        return await self._image_request(scene, request_message_id, stream_id, user_id)
+
+    @Tool("generate_image", description="用户明确要求生成不包含糯糯的图片时调用，如动物、风景、海报、动漫等，保留画风和文字。包含糯糯用 nuonuo_life_photo。用户要求重画时先用 get_image_status 查真实状态，任务结束后可按新的明确请求生成，使用新消息编号。同一条消息不要重复提交；不能把闲聊、引用、否定当成生图请求。",
+          parameters={"scene": {"type": "string", "description": "用户要画的主体、风格和内容", "required": True},
+                      "request_message_id": {"type": "string", "description": "用户要求生成图片的原始消息编号", "required": True}})
+    async def generate_image(self, scene: str, request_message_id: str, stream_id: str = "", user_id: str = "", **kwargs) -> dict:
+        return await self._image_request(scene, request_message_id, stream_id, user_id)
+
+    async def _image_request(self, scene: str, request_message_id: str, stream_id: str, user_id: str) -> dict:
         if not stream_id:
             return {"success": False, "error": "需要当前聊天流。"}
         message = await self.ctx.message.get_by_id(request_message_id, stream_id=stream_id)
         if not isinstance(message, dict) or message.get("session_id") != stream_id or message.get("is_notify"):
-            return {"success": False, "error": "没有找到当前聊天中索要照片的原始消息。"}
+            return {"success": False, "error": "没有找到当前聊天中要求生成图片的原始消息。"}
         sender_id = message.get("message_info", {}).get("user_info", {}).get("user_id", "")
-        if (user_id and sender_id != user_id) or (sender_id and sender_id == message.get("account_id")):
+        if not sender_id or (user_id and sender_id != user_id) or sender_id == message.get("account_id"):
             return {"success": False, "error": "照片请求必须来自当前用户。"}
-        text = message.get("processed_plain_text") or "".join(
-            part["data"] for part in message.get("raw_message", []) if part.get("type") == "text")
-        if (re.search(r"(不要|不用|别|不需要|不想|不必).{0,12}(发|拍|生成|画|照片|自拍|生活照)", text)
-                or not re.search(r"(发|拍|来|给|生成|画|看看|看下|想看).{0,32}(自拍|生活照|照片|写真|近照|相片|你的样子|你长什么样)", text)):
-            return {"success": False, "error": "只在用户明确索要自拍、生活照或照片时生成。"}
-        return await self._begin("life", scene, stream_id, message["message_id"])
+        message_id = str(message.get("message_id") or request_message_id)
+        if f"{stream_id}:{message_id}" in self.state["requests"]:
+            return self._duplicate_result(f"{stream_id}:{message_id}")
+        if self._task is not None and not self._task.done():
+            return {"success": False, "error": "已有一张图片正在生成，请等它完成。"}
+        try:
+            recent = await self.ctx.message.get_recent(stream_id, limit=8)
+            if not isinstance(recent, list):
+                raise ValueError("Cannot retrieve image request context")
+            context = []
+            request_time = float(message["timestamp"])
+            previous_image = {}
+            for previous in reversed(list(self.state.get("jobs", {}).values())):
+                if previous.get("stream_id") != stream_id:
+                    continue
+                created = previous.get("created_at")
+                if created and datetime.fromisoformat(created).timestamp() > request_time:
+                    continue
+                previous_image = {"kind": previous.get("kind", ""), "scene": previous.get("scene", "")[:1500]}
+                break
+            for item in recent:
+                if item.get("session_id") != stream_id or item.get("is_notify"):
+                    continue
+                if str(item.get("message_id")) == message_id or float(item["timestamp"]) > request_time:
+                    continue
+                context_sender = item.get("message_info", {}).get("user_info", {}).get("user_id", "")
+                context.append({"text": text_of(item)[:1500], "sender": context_sender,
+                    "is_bot": context_sender == message.get("account_id")})
+            result = await asyncio.wait_for(self.ctx.llm.generate(task_name="utils", temperature=0,
+                max_tokens=2048, prompt=[{"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": json.dumps({"request": text_of(message)[:6000], "request_sender": sender_id,
+                        "context": context, "previous_image": previous_image,
+                        "suggested_scene": scene[:1500]}, ensure_ascii=False)}]), timeout=30)
+            kind, accepted_scene = parse_intent(result)
+        except Exception:
+            return {"success": False, "error": "图片请求的语义识别未完成，尚未提交生图，请稍后再试。"}
+        if kind == "none":
+            return {"success": False, "error": "这条消息没有明确要求生成新图片，未提交生图。"}
+        return await self._begin(kind, accepted_scene, stream_id, message_id)
 
 
 def create_plugin() -> NuonuoPhotoPlugin:

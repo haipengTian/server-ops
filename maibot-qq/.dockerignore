@@ -4,3 +4,10 @@
 !migrate.py
 !image/
 !image/**
+!qzone-bridge/
+!qzone-bridge/apply.py
+!qzone-bridge/diary_space_bridge.py
+**/__pycache__/
+**/.pytest_cache/
+**/config.toml
+**/state.json

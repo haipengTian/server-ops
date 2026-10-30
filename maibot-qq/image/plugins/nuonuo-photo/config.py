@@ -4,7 +4,7 @@ from maibot_sdk import Field, PluginConfigBase
 class PluginSettings(PluginConfigBase):
     __ui_label__ = "插件"
     enabled: bool = Field(default=True, description="启用糯糯生活照")
-    config_version: str = "1.0.0"
+    config_version: str = "1.1.1"
 
 
 class ImageSettings(PluginConfigBase):

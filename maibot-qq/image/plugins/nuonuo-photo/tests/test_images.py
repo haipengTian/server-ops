@@ -76,3 +76,25 @@ async def test_requires_real_image_result():
         lambda request: httpx.Response(200, json={"data": [{"b64_json": base64.b64encode(b"text").decode()}]})))
     with pytest.raises(ImageError):
         await api.generate("portrait")
+
+
+@pytest.mark.parametrize("error, expected", [
+    ({"code": "content_policy_violation", "message": "private prompt and secret-test-key"}, "内容审核"),
+    ({"code": "invalid_image", "param": "image", "message": "private photo details"}, "参考图片"),
+    ({"code": "invalid_request_error", "param": "size", "message": "unsupported size"}, "size"),
+    ({"message": "Your request was rejected by the safety system"}, "内容审核"),
+])
+@pytest.mark.asyncio
+async def test_http_error_explains_known_reason_without_echoing_response(error, expected):
+    calls = []
+    def respond(request):
+        calls.append(request)
+        return httpx.Response(400, json={"error": error})
+    api = ImageAPI("https://images.example", "secret-test-key", "model", transport=httpx.MockTransport(respond))
+    with pytest.raises(ImageError) as exc:
+        await api.generate("private prompt")
+    assert expected in str(exc.value)
+    assert "HTTP 400" in str(exc.value)
+    assert "private" not in str(exc.value)
+    assert "secret-test-key" not in str(exc.value)
+    assert len(calls) == 1

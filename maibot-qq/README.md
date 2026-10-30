@@ -1,8 +1,10 @@
 # 把当前糯糯迁到服务器
 
+**已部署服务器的日常维护，请使用 [统一镜像更新、回退与迁移](RELEASES.md)。** 下面保留 Windows 首次迁入步骤。
+
 先在服务器拉好镜像，再在 Windows 停机导出、上传、导入启动。迁移完成后电脑可以关机，服务器上的 Docker 会自动重启这两个容器。
 
-部署链路：QQ → SnowLuma v2.2.1 → 官方 SnowLuma Adapter 1.1.11 → MaiBot 1.3.18。镜像带上本机的 Planner stop、联网回复资料衔接补丁和糯糯生活照插件。配置、账号、聊天库、表情库、固定肖像放在 `/opt/maibot-qq`，不进入镜像或 GitHub。
+部署链路：QQ → SnowLuma v2.2.1 → 官方 SnowLuma Adapter 1.1.11 → MaiBot 1.3.18。镜像包含 Planner stop、联网资料衔接、工具身份校验、QQ 表情视觉及糯糯生活照/通用绘图/状态查询修复。配置、账号、聊天库、表情库、固定肖像放在 `/opt/maibot-qq`，不进入镜像或 GitHub。
 
 目标为 Linux amd64、Docker Compose v2；建议至少给该服务留 4 GB 内存和 6 GB 磁盘。三个管理端口只发布到 `127.0.0.1`，OneBot 13001 仅供容器间连接。
 
@@ -90,6 +92,8 @@ bash deploy.sh backup
 更新镜像前运行 `backup`，记录旧 `.env` 和备份路径。恢复时保持服务停止，把当前 `/opt/maibot-qq` 改名保留，再在 `/opt` 解压所选备份并恢复对应 `.env`，最后执行 `start --local-stopped`。不要只切换旧镜像而忽略数据库版本。
 
 ## 代码与构建
+
+QQ 原生表情的图片/动作识别及现有实例的局部安装、回退见 [QQ 表情视觉接入](QQ_FACE_VISUAL.md)。
 
 上游固定在 MaiBot `2a9af62cec37035d29237acbe2cf3adceb700b27`、适配器 `17ad5384e0d231ec190705c9c2baa234013aaa07`。`image/local-fixes.patch` 保存本机已验证的局部修复；`image/uv.lock` 固定运行依赖（SDK 2.19.0、Dashboard 1.9.12）；`image/plugins/nuonuo-photo` 只包含源码，没有运行配置和照片。上游 GPL-3.0 许可随源码进入镜像。
 

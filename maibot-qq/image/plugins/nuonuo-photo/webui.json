@@ -5,7 +5,7 @@
     {
       "id": "studio",
       "title": "糯糯生活照",
-      "description": "先确认她的长相，再用同一张原始肖像生成生活照。",
+      "description": "糯糯照片使用固定参考，通用绘图按你的描述生成。",
       "placement": "sidebar",
       "icon": "puzzle",
       "poll_interval_seconds": 5,
@@ -40,6 +40,16 @@
           "api": "preview_life_photo",
           "parameters": {
             "scene": {
+              "type": "string",
+              "required": true,
+              "max_length": 1500
+            }
+          }
+        },
+        "draw": {
+          "api": "preview_image",
+          "parameters": {
+            "drawing_scene": {
               "type": "string",
               "required": true,
               "max_length": 1500
@@ -188,6 +198,45 @@
               "disabled_reason": "先确认固定形象，并等待当前任务完成"
             },
             {
+              "type": "text",
+              "value": "这里生成预览并保存在服务器，不发送到QQ。"
+            }
+          ]
+        },
+        {
+          "type": "card",
+          "label": "3. 画其他内容",
+          "children": [
+            {
+              "type": "text",
+              "value": "动物、风景、海报、插画等，不使用糯糯的参考图。"
+            },
+            {
+              "type": "input",
+              "name": "drawing_scene",
+              "label": "想画什么？",
+              "value": "一只趴在窗边晒太阳的小猫，水彩插画风格。"
+            },
+            {
+              "type": "button",
+              "label": "生成绘图预览",
+              "action": "draw",
+              "disabled_when": {
+                "reference": {
+                  "source": "status",
+                  "field": "busy"
+                },
+                "operator": "truthy"
+              },
+              "disabled_reason": "正在生成，请等待完成"
+            }
+          ]
+        },
+        {
+          "type": "card",
+          "label": "最近生成结果",
+          "children": [
+            {
               "type": "image",
               "value": {
                 "source": "status",
@@ -200,10 +249,6 @@
                 },
                 "operator": "truthy"
               }
-            },
-            {
-              "type": "text",
-              "value": "这里生成的预览保存在本地。在 QQ 里对糯糯说“发张你在咖啡店的生活照”，她才会生成并发送到该聊天。"
             }
           ]
         }

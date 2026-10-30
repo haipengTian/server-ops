@@ -8,3 +8,5 @@ sources/
 *.partial
 __pycache__/
 tests/__pycache__/
+compose.qq-face.yaml
+.release.lock

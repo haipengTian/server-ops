@@ -269,3 +269,15 @@ index bcc8f70..f613cf9 100644
          return history
  
      async def _restore_recent_context_from_db(self) -> None:
+diff --git a/src/plugin_runtime/component_query.py b/src/plugin_runtime/component_query.py
+--- a/src/plugin_runtime/component_query.py
++++ b/src/plugin_runtime/component_query.py
+@@ -809,4 +809,8 @@
+         payload = dict(invocation.arguments)
+         context_payload = ComponentQueryService._build_tool_context_payload(context)
++        # server-ops authoritative tool context v1
++        for key in ("user_id", "group_id", "platform", "stream_id", "chat_id"):
++            payload.pop(key, None)
++        payload.update(context_payload)
+         if entry.invoke_method == "plugin.invoke_action":
+             stream_id = str(

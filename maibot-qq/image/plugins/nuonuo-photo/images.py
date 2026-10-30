@@ -17,6 +17,35 @@ class ImageError(ValueError):
     """可直接展示的图片服务错误，不包含认证信息或上游原始响应。"""
 
 
+def http_error(response: httpx.Response) -> str:
+    """把标准错误分类转成固定说明，不回显上游正文、提示词或认证信息。"""
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = {}
+    error = payload.get("error", {}) if isinstance(payload, dict) else {}
+    if not isinstance(error, dict):
+        error = {"message": error}
+    code = error.get("code") or error.get("type")
+    message = str(error.get("message", "")).lower()
+    param = error.get("param")
+    if code in {"content_policy_violation", "moderation_blocked", "safety_violation"} or any(
+        word in message for word in ("safety system", "content policy", "moderation", "内容审核", "安全审核")
+    ):
+        reason = "服务商内容审核拒绝；需要调整场景或参考图后再提出新请求。"
+    elif code in {"invalid_image", "image_parse_error", "invalid_image_format"}:
+        reason = "服务商无法处理参考图片，请检查图片格式和大小。"
+    elif param in {"model", "image", "size", "quality", "response_format", "n", "prompt"}:
+        reason = f"服务商报告参数 {param} 不符合要求，请核对该接口支持的参数。"
+    elif response.status_code in {401, 403}:
+        reason = "认证或模型访问被拒绝，请检查接口配置及模型权限。"
+    elif response.status_code == 429:
+        reason = "服务商限流或额度不足，请检查额度和限流状态。"
+    else:
+        reason = "服务商未提供可识别的错误分类，需要查看该服务的请求日志。"
+    return f"图片接口返回 HTTP {response.status_code}：{reason}未自动重试。"
+
+
 def normalize_image(raw: bytes) -> bytes:
     if len(raw) > MAX_IMAGE_BYTES:
         raise ImageError("图片超过 24 MB，未保存。")
@@ -72,7 +101,7 @@ class ImageAPI:
                     response = await client.post(self.base_url + "/images/edits", headers=headers, data=fields,
                                                  files={"image": ("nuonuo-reference.jpg", reference, "image/jpeg")})
             if response.status_code != 200:
-                raise ImageError(f"图片接口返回 HTTP {response.status_code}，未自动重试。请检查模型权限或接口状态。")
+                raise ImageError(http_error(response))
             payload = response.json()
             items = payload.get("data", [])
             if not items or not isinstance(items[0], dict) or not items[0].get("b64_json"):
