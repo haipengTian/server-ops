@@ -84,6 +84,9 @@ class ReleaseTests(unittest.TestCase):
             self.assertEqual(release.code_differences(old, new), ['runtime.py'])
             (new / 'runtime.py').write_text('old fix\n')
             self.assertEqual(release.code_differences(old, new), [])
+            (old / 'chat.prompt').write_text('keep planner instructions')
+            (new / 'chat.prompt').write_text('changed planner instructions')
+            self.assertEqual(release.code_differences(old, new), ['chat.prompt'])
 
     def test_backup_round_trip_preserves_all_plugins_images_and_private_settings(self):
         with tempfile.TemporaryDirectory() as tmp:

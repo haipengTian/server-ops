@@ -42,7 +42,7 @@ def validate_legacy_overlay(value):
 def code_differences(old, new):
     def inventory(root):
         return {str(p.relative_to(root)).replace('\\', '/'): p.read_text(encoding='utf-8')
-                for p in root.rglob('*.py') if '__pycache__' not in p.parts}
+                for p in root.rglob('*') if p.is_file() and p.suffix in {'.py', '.prompt'} and '__pycache__' not in p.parts}
     before, after = inventory(old), inventory(new)
     return sorted(name for name in before.keys() | after.keys() if before.get(name) != after.get(name))
 
@@ -92,7 +92,8 @@ def audit_code(cid, image):
         with tempfile.TemporaryDirectory(prefix='maibot-audit-') as tmp:
             root = Path(tmp)
             for label, container in (('live', cid), ('next', candidate)):
-                for name, source in (('src', '/opt/maibot/src'), ('adapter', '/opt/bundled-plugins/snowluma-adapter')):
+                for name, source in (('src', '/opt/maibot/src'), ('prompts', '/opt/maibot/prompts'),
+                                     ('adapter', '/opt/bundled-plugins/snowluma-adapter')):
                     dest = root / label / name; dest.parent.mkdir(parents=True, exist_ok=True)
                     run(['docker', 'cp', container + ':' + source, dest])
             differences = code_differences(root / 'live/src', root / 'next/src')
@@ -106,6 +107,7 @@ def audit_code(cid, image):
                 if patch.patch_host(live) == expected:
                     differences.remove('plugin_runtime/component_query.py')
             differences += ['adapter/' + name for name in code_differences(root / 'live/adapter', root / 'next/adapter')]
+            differences += ['prompts/' + name for name in code_differences(root / 'live/prompts', root / 'next/prompts')]
             if differences:
                 raise ValueError('Unrecorded live source differences; keep current service and incorporate these first: ' + ', '.join(differences))
     finally:
