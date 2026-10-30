@@ -45,13 +45,13 @@ jobs:
         env:
           IMAGE: ${{ steps.version.outputs.tag }}
         run: bash maibot-qq/tests/image-smoke.sh "$IMAGE"
-      - name: Photo plugin SDK and behavior regressions
+      - name: Bundled plugin SDK and behavior regressions
         env:
           IMAGE: ${{ steps.version.outputs.tag }}
         run: |
           docker run --rm --network bridge --entrypoint /bin/sh \
             -e MAIBOT_APP_ROOT=/opt/maibot "$IMAGE" -c \
-            'uv pip install --python /opt/maibot/.venv/bin/python pytest pytest-asyncio && cp -r /opt/bundled-plugins/nuonuo-photo /tmp/photo-tests && python -m pytest /tmp/photo-tests/tests -q --asyncio-mode=auto -o asyncio_default_fixture_loop_scope=function'
+            'uv pip install --python /opt/maibot/.venv/bin/python pytest pytest-asyncio && cp -r /opt/bundled-plugins/nuonuo-photo /tmp/photo-tests && cp -r /opt/bundled-plugins/session-continuity /tmp/continuity-tests && python -m pytest /tmp/photo-tests/tests /tmp/continuity-tests/tests -q --asyncio-mode=auto -o asyncio_default_fixture_loop_scope=function'
       - uses: docker/login-action@v4
         if: github.event_name != 'pull_request'
         with:
