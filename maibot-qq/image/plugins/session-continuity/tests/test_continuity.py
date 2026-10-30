@@ -42,8 +42,6 @@ def plugin(tmp_path):
     spec.loader.exec_module(module)
     value = module.SessionContinuityPlugin()
     settings = value.build_default_config()
-    settings["continuity"]["links"] = [{"platform": "qq", "account_id": BOT,
-                                        "user_id": USER, "group_id": GROUP}]
     value.set_plugin_config(settings)
     request = message("req", "把刚才私聊那个表情包发这里")
     original = message("p1", "[一只猫挥手]", session="private", group=None, age=20,
@@ -67,7 +65,16 @@ def plugin(tmp_path):
                 "user_id": "", "account_id": BOT, "scope": ""},
                {"session_id": "private", "platform": "qq", "group_id": "",
                 "user_id": USER, "account_id": BOT, "scope": ""}]
+    policy = {"a_memorix.shared_memory_groups": [{"targets": [
+        {"platform":"qq", "item_id":GROUP, "rule_type":"group"},
+        {"platform":"qq", "item_id":USER, "rule_type":"private"}]}],
+        "a_memorix.global_memory_sharing_enabled": False}
+    def config_value(key, default=None):
+        if key == "a_memorix":
+            return json.loads(json.dumps({k.removeprefix("a_memorix."):v for k,v in policy.items()}))
+        return policy.get(key, default)
     ctx = SimpleNamespace(paths=SimpleNamespace(data_dir=tmp_path),
+        config=SimpleNamespace(get=AsyncMock(side_effect=config_value)),
         chat=SimpleNamespace(get_all_streams=AsyncMock(return_value=streams)),
         message=SimpleNamespace(get_recent=AsyncMock(side_effect=recent), get_by_id=AsyncMock(side_effect=by_id)),
         llm=SimpleNamespace(generate=AsyncMock(return_value={"success": True, "response": json.dumps(
@@ -77,6 +84,7 @@ def plugin(tmp_path):
         logger=logging.getLogger("continuity-test"))
     value._set_context(ctx)
     value.test_request, value.test_source, value.test_streams = request, source, streams
+    value.test_policy = policy
     return value
 
 
@@ -233,7 +241,7 @@ async def test_ambiguous_invalid_or_failed_semantic_result_never_opens_media(plu
 
 def test_sdk_registration_and_safe_defaults(plugin):
     default = plugin.build_default_config()
-    assert default["continuity"]["links"] == []
+    assert "links" not in default["continuity"]
     components = plugin.get_components()
     names = {c["name"] for c in components}
     assert {"before_planner", "before_replyer", "send_linked_media"} <= names
@@ -307,6 +315,8 @@ async def test_real_sdk_unwraps_host_envelopes_and_sends_exact_media(plugin):
         capability, args = payload["capability"], payload["args"]
         if capability == "chat.get_all_streams":
             return {"success": True, "streams": plugin.test_streams}
+        if capability == "config.get":
+            return {"success": True, "value": await old.config.get(**args)}
         if capability == "message.get_recent":
             return {"success": True, "messages": await old.message.get_recent(**args)}
         if capability == "message.get_by_id":
@@ -464,3 +474,207 @@ async def test_revoke_during_ledger_write_prevents_media_send(plugin):
     plugin._save_ledger = revoke
     assert not (await plugin.send_linked_media(ref, "req", stream_id="group"))["success"]
     plugin.ctx.send.emoji.assert_not_awaited()
+
+@pytest.mark.asyncio
+async def test_existing_shared_memory_group_is_the_only_routing_authority(plugin):
+    # An empty plugin configuration still uses the bot's existing shared-memory group.
+    plugin.set_plugin_config(plugin.build_default_config())
+    assert "一只猫挥手" in bridge_text(await inject(plugin))
+    plugin.test_policy["a_memorix.shared_memory_groups"] = []
+    assert "一只猫" not in bridge_text(await inject(plugin))
+    assert "一只猫" not in bridge_text(await plugin.before_replyer(
+        items=[item("req")], session_id="group", reply_message_id="req"))
+
+
+@pytest.mark.asyncio
+async def test_legacy_plugin_links_cannot_bypass_shared_memory_policy(plugin):
+    legacy = plugin.build_default_config()
+    legacy["continuity"]["links"] = [{"platform":"qq","account_id":BOT,"user_id":USER,"group_id":GROUP}]
+    plugin.set_plugin_config(legacy)
+    plugin.test_policy["a_memorix.shared_memory_groups"] = []
+    assert "一只猫" not in bridge_text(await inject(plugin))
+    plugin.ctx.llm.generate.assert_not_awaited()
+    plugin.ctx.message.get_recent.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_bot_policy_revocation_during_semantic_request_prevents_injection(plugin):
+    async def revoke(*args, **kwargs):
+        plugin.test_policy["a_memorix.shared_memory_groups"] = []
+        return {"success": True, "response": json.dumps({"continue": True, "context_indices": [1]})}
+    plugin.ctx.llm.generate.side_effect = revoke
+    assert "一只猫" not in bridge_text(await inject(plugin))
+    assert not plugin.bridges
+
+
+@pytest.mark.asyncio
+async def test_bot_policy_revocation_prevents_cached_reply_and_media_send(plugin):
+    await inject(plugin)
+    ref = next(iter(plugin.bridges[("group", "req")].media))
+    plugin.test_policy["a_memorix.shared_memory_groups"] = []
+    assert "一只猫" not in bridge_text(await plugin.before_replyer(
+        items=[item("req")], session_id="group", reply_message_id="req"))
+    assert not (await plugin.send_linked_media(ref, "req", stream_id="group"))["success"]
+    plugin.ctx.send.emoji.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_multiple_users_share_one_group_without_sharing_each_others_private_chat(plugin):
+    plugin.test_policy["a_memorix.shared_memory_groups"][0]["targets"].append(
+        {"platform":"qq", "item_id": OTHER, "rule_type":"private"})
+    plugin.test_streams.append({"session_id":"other-private", "platform":"qq", "group_id":None,
+                              "user_id":OTHER, "account_id":BOT, "scope":""})
+    reads = []
+    old = plugin.ctx.message.get_recent.side_effect
+    async def read(chat_id, limit=10):
+        reads.append(chat_id)
+        return await old(chat_id,limit)
+    plugin.ctx.message.get_recent.side_effect = read
+    assert "一只猫挥手" in bridge_text(await inject(plugin))
+    assert "other-private" not in reads
+
+
+@pytest.mark.asyncio
+async def test_global_memory_setting_is_respected_without_opening_other_private_chats(plugin):
+    plugin.test_policy["a_memorix.shared_memory_groups"] = []
+    plugin.test_policy["a_memorix.global_memory_sharing_enabled"] = True
+    assert "一只猫挥手" in bridge_text(await inject(plugin))
+
+
+@pytest.mark.asyncio
+async def test_overlapping_shared_groups_are_not_transitively_merged(plugin):
+    plugin.test_policy["a_memorix.shared_memory_groups"] = [
+        {"targets":[{"platform":"qq","item_id":GROUP,"rule_type":"group"},
+                    {"platform":"qq","item_id":"other-group","rule_type":"group"}]},
+        {"targets":[{"platform":"qq","item_id":"other-group","rule_type":"group"},
+                    {"platform":"qq","item_id":USER,"rule_type":"private"}]}]
+    assert "一只猫" not in bridge_text(await inject(plugin))
+    plugin.ctx.message.get_recent.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_bot_policy_revocation_during_ledger_write_prevents_media_send(plugin):
+    await inject(plugin)
+    ref = next(iter(plugin.bridges[("group", "req")].media))
+    save = plugin._save_ledger
+    async def revoke():
+        plugin.test_policy["a_memorix.shared_memory_groups"] = []
+        await save()
+    plugin._save_ledger = revoke
+    assert not (await plugin.send_linked_media(ref, "req", stream_id="group"))["success"]
+    plugin.ctx.send.emoji.assert_not_awaited()
+
+@pytest.mark.asyncio
+async def test_private_followup_can_select_correct_media_from_multiple_shared_groups(plugin):
+    plugin.test_request.update(session_id="private", processed_plain_text="把二群刚才那张猫猫图发给我")
+    plugin.test_request["message_info"]["group_info"] = None
+    plugin.test_streams.append({"session_id":"group2", "platform":"qq", "group_id":"900000002",
+                               "group_name":"二群", "user_id":"", "account_id":BOT, "scope":""})
+    plugin.test_policy["a_memorix.shared_memory_groups"][0]["targets"].append(
+        {"platform":"qq", "item_id":"900000002", "rule_type":"group"})
+    first = message("g1", "一群的篮球", age=30)
+    second = message("g2", "二群的猫猫图", session="group2", group="900000002", age=20,
+                     media=[{"type":"emoji", "hash":"cat2", "data":"猫猫"}])
+    rows = {"private":[plugin.test_request], "group":[first], "group2":[second]}
+    plugin.ctx.message.get_recent.side_effect = lambda chat_id,limit=10: rows[chat_id]
+    plugin.ctx.llm.generate.return_value = {"success":True, "response":json.dumps(
+        {"continue":True,"context_indices":[1],"send_media":{"index":1,"component":0}})}
+    async def original(mid, **kwargs):
+        assert mid == "g2" and kwargs["chat_id"] == "group2"
+        return {**second, "raw_message":[{**second["raw_message"][0],"binary_data_base64":"b3JpZ2luYWw="}]}
+    plugin.ctx.message.get_by_id.side_effect = original
+    result = await plugin.before_planner(items=[item("req")], session_id="private")
+    assert "二群的猫猫图" in bridge_text(result) and "一群的篮球" not in bridge_text(result)
+    ref = next(iter(plugin.bridges[("private","req")].media))
+    assert (await plugin.send_linked_media(ref,"req",stream_id="private"))["success"]
+    plugin.ctx.send.emoji.assert_awaited_once_with("b3JpZ2luYWw=", "private",
+        return_details=True, sync_to_maisaka_history=True)
+
+
+def test_sharing_projection_uses_host_exact_targets_and_nontransitive_union(plugin):
+    module = sys.modules[type(plugin).__module__]
+    sharing = sys.modules[module.__package__ + ".sharing"]
+    streams = plugin.test_streams
+    cases = [([], {"group"}),
+             ([{"targets":[{"platform":"qq","item_id":GROUP,"rule_type":"group"},
+                           {"platform":"qq","item_id":USER,"rule_type":"private"}]}], {"group","private"}),
+             ([{"targets":[{"platform":"qq","item_id":"*","rule_type":"group"},
+                           {"platform":"qq","item_id":USER,"rule_type":"private"}]}], {"group"}),
+             ([{"targets":[{"platform":"other","item_id":GROUP,"rule_type":"group"},
+                           {"platform":"qq","item_id":USER,"rule_type":"private"}]}], {"group"})]
+    for groups, expected in cases:
+        assert sharing.shared_session_ids("group", streams, groups, False) == expected
+
+@pytest.mark.asyncio
+async def test_pinned_host_config_get_serialization_and_shared_group_projection(plugin):
+    import ast
+    import os
+    import typing
+    from pydantic import BaseModel, Field, create_model
+    root = os.environ.get("MAIBOT_APP_ROOT")
+    if not root:
+        pytest.skip("Pinned host config contract is exercised by the Docker image job")
+    host = Path(root)
+    env = {"__name__":"continuity_config_contract", **vars(typing), "BaseModel":BaseModel,
+           "ConfigBase":BaseModel, "Field":Field, "RULE_TYPE_OPTION_DESCRIPTIONS":{}}
+
+    def definitions(path, names):
+        tree = ast.parse((host / path).read_text(encoding="utf-8-sig"))
+        selected = [n for n in tree.body if getattr(n,"name",None) in names]
+        assert len(selected) == len(names)
+        exec(compile(ast.Module(body=selected,type_ignores=[]), str(host/path), "exec"), env)
+
+    # Use the pinned Host's actual target fields, nested config reader and RPC response model.
+    definitions("src/config/official_configs.py", {"TargetItem", "ChatStreamGroup"})
+    definitions("src/plugin_runtime/capabilities/core.py", {"_get_nested_config_value"})
+    definitions("src/plugin_runtime/protocol/envelope.py", {"CapabilityResponsePayload"})
+    native_groups = [env["ChatStreamGroup"](**g) for g in plugin.test_policy["a_memorix.shared_memory_groups"]]
+    memory_type = create_model("MemorySettings", shared_memory_groups=(list[env["ChatStreamGroup"]],...),
+                               global_memory_sharing_enabled=(bool,False))
+    native_config = SimpleNamespace(a_memorix=memory_type(shared_memory_groups=native_groups))
+    value = env["_get_nested_config_value"](native_config,"a_memorix",{})
+    wire = env["CapabilityResponsePayload"](success=True,result={"success":True,"value":value}).model_dump()
+    groups = wire["result"]["value"]["shared_memory_groups"]
+    assert isinstance(groups[0],dict) and groups[0]["targets"][1]["item_id"] == USER
+    plugin.test_policy["a_memorix.shared_memory_groups"] = groups
+    assert "一只猫挥手" in bridge_text(await inject(plugin))
+
+    # Run the native direct-group union against exactly the same resolved real stream IDs.
+    target_map = {("qq",GROUP,"group"):{"group"}, ("qq",USER,"private"):{"private"}}
+    env["global_config"] = native_config
+    env["ChatConfigUtils"] = SimpleNamespace(get_target_session_ids=lambda t: target_map.get(
+        (t.platform,t.item_id,t.rule_type), set()))
+    definitions("src/common/utils/utils_config.py", {"AMemorixConfigUtils"})
+    native_ids = env["AMemorixConfigUtils"].get_shared_memory_session_ids("group")
+    sharing = sys.modules[sys.modules[type(plugin).__module__].__package__ + ".sharing"]
+    assert sharing.shared_session_ids("group",plugin.test_streams,groups,False) == native_ids
+
+@pytest.mark.asyncio
+async def test_active_request_changed_during_policy_recheck_prevents_stale_injection(plugin):
+    await inject(plugin)
+    old = plugin._bridge_route
+    async def changed(stream_id, bridge):
+        route = await old(stream_id, bridge)
+        plugin.active[stream_id] = "different-request"
+        return route
+    plugin._bridge_route = changed
+    assert "一只猫" not in bridge_text(await inject(plugin))
+
+@pytest.mark.asyncio
+async def test_routing_reads_one_memory_policy_snapshot_not_mixed_versions(plugin):
+    await inject(plugin)
+    ref = next(iter(plugin.bridges[("group", "req")].media))
+    old = plugin.ctx.config.get.side_effect
+    reads = 0
+    def revoke(key, default=None):
+        nonlocal reads
+        if key in {"a_memorix", "a_memorix.global_memory_sharing_enabled"}:
+            reads += 1
+            if reads == 2:
+                plugin.test_policy["a_memorix.shared_memory_groups"] = []
+        return old(key,default)
+    plugin.ctx.config.get.side_effect = revoke
+    plugin.ctx.config.get.reset_mock()
+    assert not (await plugin.send_linked_media(ref,"req",stream_id="group"))["success"]
+    plugin.ctx.send.emoji.assert_not_awaited()
+    assert all(call.args[0] == "a_memorix" for call in plugin.ctx.config.get.await_args_list)

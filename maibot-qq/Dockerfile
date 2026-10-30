@@ -38,7 +38,7 @@ COPY image/fix_read_gif_palette.py image/read-gif-palette.patch image/instance_f
 COPY qzone-bridge/apply.py qzone-bridge/diary_space_bridge.py /opt/deploy/qzone-bridge/
 ENV PATH="/opt/maibot/.venv/bin:${PATH}" PYTHONPATH=/opt/maibot PYTHONUTF8=1
 LABEL org.opencontainers.image.source="https://github.com/haipengTian/server-ops" \
-      org.opencontainers.image.version="1.3.18-qq.3" \
+      org.opencontainers.image.version="1.3.18-qq.4" \
       org.opencontainers.image.licenses="GPL-3.0"
 EXPOSE 8001
 ENTRYPOINT ["/opt/maibot/.venv/bin/python", "/opt/deploy/entrypoint.py"]
