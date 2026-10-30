@@ -50,9 +50,8 @@ jobs:
           IMAGE: ${{ steps.version.outputs.tag }}
         run: |
           docker run --rm --network bridge --entrypoint /bin/sh \
-            -v "$PWD/maibot-qq/image/plugins/nuonuo-photo/tests:/tests:ro" \
             -e MAIBOT_APP_ROOT=/opt/maibot "$IMAGE" -c \
-            'uv pip install --python /opt/maibot/.venv/bin/python pytest pytest-asyncio && cp -r /opt/bundled-plugins/nuonuo-photo /tmp/photo-tests && cp -r /tests /tmp/photo-tests/tests && python -m pytest /tmp/photo-tests/tests -q --asyncio-mode=auto -o asyncio_default_fixture_loop_scope=function'
+            'uv pip install --python /opt/maibot/.venv/bin/python pytest pytest-asyncio && cp -r /opt/bundled-plugins/nuonuo-photo /tmp/photo-tests && python -m pytest /tmp/photo-tests/tests -q --asyncio-mode=auto -o asyncio_default_fixture_loop_scope=function'
       - uses: docker/login-action@v4
         if: github.event_name != 'pull_request'
         with:
