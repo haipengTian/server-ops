@@ -4,8 +4,7 @@
 默认使用 `127.0.0.1:3014`，数据保存在 `/opt/toonflow/app`。
 
 源码仓库：<https://github.com/haipengTian/Toonflow-app>。
-首版计划基于上游 `v2.0.9`，发布镜像 `ghcr.io/haipengtian/toonflow:2.0.9-custom.1`。
-须先完成源码仓库 fork、提交、推送标签和 Actions 发布，再执行以下安装命令。
+首版基于上游 `v2.0.9`，已发布镜像 `ghcr.io/haipengtian/toonflow:2.0.9-custom.1`，支持匿名拉取。
 镜像仅构建 Linux amd64；服务器用 `uname -m` 确认架构为 `x86_64`。
 
 ## 安装
@@ -101,5 +100,7 @@ sudo docker compose logs --tail 100 toonflow
 ```
 
 容器健康检查验证首页和真实工作区接口；模型可用性、原项目和生成结果需要页面实际操作确认。
+2026-11-01 已用上述发布镜像验证首页、工作区文件读写、容器重建后文件保留及 Compose 健康检查。
+服务器安装和真实模型生成尚待执行。
 本地部署脚本检查入口为 `bash toonflow/tests/run.sh`，其中 Docker 是隔离替身，
 项目备份使用真实文件和 tar；它不代表服务器或模型生成验收。
