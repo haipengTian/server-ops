@@ -4,7 +4,7 @@
 主机 nginx 提供 HTTPS，容器仍只使用 `127.0.0.1:3014`，数据保存在 `/opt/toonflow/app`。
 
 源码仓库：<https://github.com/haipengTian/Toonflow-app>。
-基于上游 `v2.0.9`，鉴权版本镜像为 `ghcr.io/haipengtian/toonflow:2.0.9-custom.2`，支持匿名拉取。
+基于上游 `v2.0.9`，当前镜像为 `ghcr.io/haipengtian/toonflow:2.0.9-custom.3`，包含鉴权与 Muse 供应商，支持匿名拉取。
 镜像仅构建 Linux amd64；服务器用 `uname -m` 确认架构为 `x86_64`。
 
 ## 安装
@@ -16,7 +16,7 @@
 
 ```bash
 cd /opt/server-ops/toonflow
-sudo bash init.sh ghcr.io/haipengtian/toonflow:2.0.9-custom.2
+sudo bash init.sh ghcr.io/haipengtian/toonflow:2.0.9-custom.3
 sudo bash setup-auth.sh admin https://toonflow.thpvip.xyz
 sudo bash install.sh
 sudo bash setup-nginx.sh tianhaipeng34@gmail.com
@@ -39,7 +39,7 @@ Docker 绑定挂载标签。登录页、鉴权状态和匿名业务接口拒绝�
 ```bash
 cd /opt/server-ops/toonflow
 sudo bash setup-auth.sh admin https://toonflow.thpvip.xyz
-sudo bash update.sh ghcr.io/haipengtian/toonflow:2.0.9-custom.2
+sudo bash update.sh ghcr.io/haipengtian/toonflow:2.0.9-custom.3
 sudo bash setup-nginx.sh tianhaipeng34@gmail.com
 ```
 
@@ -62,12 +62,27 @@ sudo bash setup-nginx.sh tianhaipeng34@gmail.com
 公网健康检查不会读取项目或模型密钥。MCP/A2A 仍使用各自凭据，不接受工作台密码作为 Bearer。
 这是单管理员私人工作台，登录后可访问所有项目和配置，不提供多人数据隔离。
 
+## 配置 Muse 图片和视频
+
+`custom.3` 内置「Sub2API / Muse」。升级并刷新页面后，打开「设置 → 媒体模型」，
+找到「Sub2API / Muse」并点击「编辑模型」，填写 Sub2API 地址和 API Key 后保存。
+地址可填 `https://proxy.thpvip.xyz`，也支持末尾带 `/v1`；无需导入 `.ts` 文件。
+若该供应商未安装，可用「添加供应商」中的同名选项添加。
+
+画布的图片节点选择「Muse 图片」（`muse-image`），视频节点选择「Muse 视频」（`muse-video`）。
+支持最多 4 张参考图，视频默认请求 6 秒，提供 480p、720p、1080p；
+Muse 按提示词理解比例、时长和分辨率，实际成品可能不同。
+视频自动查询原任务并通过 Sub2API 鉴权下载到工作区，刷新或重启后可复查原任务。
+
+Sub2API 须使用 `0.2.19-custom.2` 或更新版本，Key 所属分组放行两个模型并允许媒体生成。
+模型价格在 Sub2API 配置。更新后由用户用自己的 Key 验收一次图片和一次视频生成、播放及扣费。
+
 ## 备份和升级
 
 ```bash
 cd /opt/server-ops/toonflow
 sudo bash backup.sh
-sudo bash update.sh ghcr.io/haipengtian/toonflow:2.0.9-custom.2
+sudo bash update.sh ghcr.io/haipengtian/toonflow:2.0.9-custom.3
 ```
 
 升级命令中的版本须先实际发布。脚本先拉新镜像，成功后暂停应用、备份完整 `app/`、
