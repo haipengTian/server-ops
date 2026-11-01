@@ -1,26 +1,30 @@
 # 部署 Toonflow 个人镜像
 
-在服务器拉取自己 GHCR 的固定版本，打开画布后配置模型并选择工作区。
-默认使用 `127.0.0.1:3014`，数据保存在 `/opt/toonflow/app`。
+打开 `https://toonflow.thpvip.xyz`，使用自己设置的管理员账号登录工作台。
+主机 nginx 提供 HTTPS，容器仍只使用 `127.0.0.1:3014`，数据保存在 `/opt/toonflow/app`。
 
 源码仓库：<https://github.com/haipengTian/Toonflow-app>。
-首版基于上游 `v2.0.9`，已发布镜像 `ghcr.io/haipengtian/toonflow:2.0.9-custom.1`，支持匿名拉取。
+基于上游 `v2.0.9`，鉴权版本镜像为 `ghcr.io/haipengtian/toonflow:2.0.9-custom.2`，支持匿名拉取。
 镜像仅构建 Linux amd64；服务器用 `uname -m` 确认架构为 `x86_64`。
 
 ## 安装
 
-服务器已有 Docker Engine、Compose 插件，所需命令包括 `flock`、`ss`、`realpath` 和 `tar`。
+将 `toonflow.thpvip.xyz` 的 A/AAAA 记录指向服务器；仅保留实际可达的地址。
+服务器已有 Docker Engine、Compose 插件，所需命令包括 `flock`、`ss`、`realpath`、`tar`、`curl` 和 `python3`。
+主机 nginx 和证书工具沿用仓库 `nginx/` 的安装方式，HTTP/HTTPS 端口需可从公网访问。
 在 `/opt/server-ops` 更新到包含 `toonflow/` 的版本，然后执行：
 
 ```bash
 cd /opt/server-ops/toonflow
-sudo bash init.sh ghcr.io/haipengtian/toonflow:2.0.9-custom.1
+sudo bash init.sh ghcr.io/haipengtian/toonflow:2.0.9-custom.2
+sudo bash setup-auth.sh admin https://toonflow.thpvip.xyz
 sudo bash install.sh
+sudo bash setup-nginx.sh tianhaipeng34@gmail.com
 sudo bash status.sh
 ```
 
 首次安装会准备镜像运行用户可写的 `app/workspaces/myProject`，并为 SELinux 主机设置
-Docker 绑定挂载标签。网页和工作区 API 通过检查后，容器才算就绪。
+Docker 绑定挂载标签。登录页、鉴权状态和匿名业务接口拒绝检查通过后，容器才算就绪。
 重复运行 `init.sh` 保留现有 `.env`；后续换版本使用 `update.sh`。
 首次 GHCR 发布需将包设为 public，或由用户在服务器本地登录私有 GHCR。
 
@@ -28,15 +32,22 @@ Docker 绑定挂载标签。网页和工作区 API 通过检查后，容器才�
 这是 API 创作工作台的资源上限；不包含本地大模型或 ComfyUI 算力。
 修改后重新执行 `install.sh` 重建容器，单纯 restart 不会更新容器配置。
 
-## 从电脑访问
+## 从无鉴权版本升级
 
-在自己的电脑执行，将用户名、服务器地址、SSH 端口换为实际值：
+原有 `.env` 不会被初始化覆盖。先交互设置管理员密码，再更新到鉴权镜像：
 
 ```bash
-ssh -N -p SSH端口 -L 3014:127.0.0.1:3014 用户名@服务器地址
+cd /opt/server-ops/toonflow
+sudo bash setup-auth.sh admin https://toonflow.thpvip.xyz
+sudo bash update.sh ghcr.io/haipengtian/toonflow:2.0.9-custom.2
+sudo bash setup-nginx.sh tianhaipeng34@gmail.com
 ```
 
-保持 SSH 连接，浏览器打开 `http://127.0.0.1:3014`：
+## 登录并创作
+
+浏览器打开 `https://toonflow.thpvip.xyz`，使用 `admin` 和终端设置的密码。
+密码只在服务器终端输入两次，不会显示，也不写入命令历史；`.env` 权限为 600，只保存随机盐和 scrypt 摘要。
+首次进入的 Toonflow 官方账号页与工作台管理员是两回事；使用自有模型可选择「配置第三方模型」或「稍后配置」。
 
 1. 在设置中配置语言模型及图片、视频模型供应商。
 2. 选择服务器工作区中的 `myProject`，创建并保存画布。
@@ -45,9 +56,11 @@ ssh -N -p SSH端口 -L 3014:127.0.0.1:3014 用户名@服务器地址
 模型密钥由用户直接在页面配置，不写进仓库或镜像。默认数据目录包括配置、插件、技能、
 画布、会话和媒体文件，备份需完整保存 `app/`。
 
-Toonflow 当前自部署页面和业务 API 没有独立登录鉴权。
-需要公网域名时，应先确定域名和认证入口，再接主机 nginx；
-不要直接使用公共 `nginx/add-site.sh` 将它作为无认证应用公开。
+首页侧栏「登录管理」可退出当前浏览器；会话最长 24 小时，重启后需要重新登录。
+更改密码时重跑 `setup-auth.sh`，然后 `install.sh` 重建同版本容器，让旧会话全部失效。
+`setup-nginx.sh` 先确认应用启用鉴权，并检查匿名业务接口返回 401，才调用公共 nginx 配置入口。
+公网健康检查不会读取项目或模型密钥。MCP/A2A 仍使用各自凭据，不接受工作台密码作为 Bearer。
+这是单管理员私人工作台，登录后可访问所有项目和配置，不提供多人数据隔离。
 
 ## 备份和升级
 
@@ -99,8 +112,7 @@ sudo bash status.sh
 sudo docker compose logs --tail 100 toonflow
 ```
 
-容器健康检查验证首页和真实工作区接口；模型可用性、原项目和生成结果需要页面实际操作确认。
-2026-11-01 已用上述发布镜像验证首页、工作区文件读写、容器重建后文件保留及 Compose 健康检查。
-服务器安装和真实模型生成尚待执行。
+容器健康检查验证登录页、鉴权状态和匿名 API 拒绝；模型可用性、原项目和生成结果需要页面实际操作确认。
+服务器安装、DNS、证书和真实模型生成由服务器执行后验收。
 本地部署脚本检查入口为 `bash toonflow/tests/run.sh`，其中 Docker 是隔离替身，
 项目备份使用真实文件和 tar；它不代表服务器或模型生成验收。

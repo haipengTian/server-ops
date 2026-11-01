@@ -23,4 +23,5 @@ jobs:
           cp toonflow/.env.example toonflow/.env
           trap 'rm -f toonflow/.env' EXIT
           sed -i 's|^TOONFLOW_IMAGE=.*|TOONFLOW_IMAGE=ghcr.io/haipengtian/toonflow:2.0.9-custom.1|' toonflow/.env
+          sed -i "s|^TOONFLOW_AUTH_PASSWORD_HASH=.*|TOONFLOW_AUTH_PASSWORD_HASH=$(printf '%064d:%0128d' 0 0)|" toonflow/.env
           docker compose --env-file toonflow/.env -f toonflow/docker-compose.yml config --quiet

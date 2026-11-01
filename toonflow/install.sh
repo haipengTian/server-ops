@@ -6,6 +6,7 @@ source "$(dirname -- "$0")/lib.sh"
 require_root
 lock_operation
 load_env
+require_auth
 check_docker
 require_commands ss
 if [[ -f $TOONFLOW_DATA_DIR/state/current-image && $(cat "$TOONFLOW_DATA_DIR/state/current-image") != "$TOONFLOW_IMAGE" ]]; then
@@ -30,4 +31,4 @@ if ! start_app; then
   die '启动失败，已尝试停止应用；请查看 docker compose logs --tail 100 toonflow'
 fi
 printf '%s\n' "$TOONFLOW_IMAGE" > "$TOONFLOW_DATA_DIR/state/current-image"
-printf 'Toonflow 页面和工作区接口已就绪：127.0.0.1:%s。请通过 SSH 隧道访问并配置模型。\n' "$TOONFLOW_HOST_PORT"
+printf 'Toonflow 登录入口已就绪：127.0.0.1:%s。运行 setup-nginx.sh 配置公网 HTTPS。\n' "$TOONFLOW_HOST_PORT"

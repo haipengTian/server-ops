@@ -9,6 +9,7 @@ validate_image "$1"
 target=$1
 lock_operation
 load_env
+require_auth
 check_docker
 [[ -n $(compose ps --status running -q toonflow) ]] || die '应用未运行，请先处理当前故障'
 old=$TOONFLOW_IMAGE

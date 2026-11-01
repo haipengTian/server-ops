@@ -26,7 +26,7 @@ load_env() {
     [[ $line == *=* ]] || die '.env 格式须为 KEY=value'
     key=${line%%=*}; value=${line#*=}
     case "$key" in
-      TOONFLOW_IMAGE|TOONFLOW_HOST_PORT|TOONFLOW_DATA_DIR|TOONFLOW_WAIT_SECONDS|COMPOSE_PROJECT_NAME|TOONFLOW_MEM_LIMIT|TOONFLOW_CPUS|TZ) ;;
+      TOONFLOW_IMAGE|TOONFLOW_HOST_PORT|TOONFLOW_DATA_DIR|TOONFLOW_WAIT_SECONDS|COMPOSE_PROJECT_NAME|TOONFLOW_MEM_LIMIT|TOONFLOW_CPUS|TZ|TOONFLOW_AUTH_ENABLED|TOONFLOW_PUBLIC_ORIGIN|TOONFLOW_AUTH_USERNAME|TOONFLOW_AUTH_PASSWORD_HASH) ;;
       *) die "不支持的配置键：$key" ;;
     esac
     [[ ! ${seen[$key]+set} ]] || die "配置键重复：$key"
@@ -51,6 +51,12 @@ load_env() {
   [[ $TOONFLOW_MEM_LIMIT =~ ^[1-9][0-9]*[mg]$ ]] || die '内存上限应使用正整数加 m 或 g'
   [[ $TOONFLOW_CPUS =~ ^[0-9]+(\.[0-9]+)?$ && $TOONFLOW_CPUS =~ [1-9] ]] || die 'CPU 上限须为正数'
   [[ $TZ =~ ^[A-Za-z_]+(/[A-Za-z0-9_+-]+)*$ ]] || die '时区格式无效'
+}
+require_auth() {
+  [[ ${TOONFLOW_AUTH_ENABLED:-} == true ]] || die '必须先运行 setup-auth.sh 开启登录鉴权'
+  [[ ${TOONFLOW_PUBLIC_ORIGIN:-} =~ ^https://([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,63}$ ]] || die '公网来源须为 https://域名，不含路径或端口'
+  [[ ${TOONFLOW_AUTH_USERNAME:-} =~ ^[a-zA-Z0-9@._-]{1,64}$ ]] || die '请设置管理员用户名'
+  [[ ${TOONFLOW_AUTH_PASSWORD_HASH:-} =~ ^[a-f0-9]{64}:[a-f0-9]{128}$ ]] || die '必须先运行 setup-auth.sh 设置管理员密码'
 }
 compose() { docker compose --project-directory "$OPS_DIR" --env-file "$ENV_FILE" -f "$OPS_DIR/docker-compose.yml" "$@"; }
 check_docker() {

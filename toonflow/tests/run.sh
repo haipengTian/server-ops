@@ -48,6 +48,13 @@ cmp "$ops/.env" "$scratch/original.env"
 [[ $(stat -c %a "$ops/.env") == 600 ]]
 echo 'PASS: initialization preserves configuration and mode 600'
 
+if bash "$ops/install.sh" > "$scratch/output" 2>&1; then
+  echo 'FAIL: install accepted missing auth configuration' >&2; exit 1
+fi
+sed -i "s|^TOONFLOW_AUTH_PASSWORD_HASH=.*|TOONFLOW_AUTH_PASSWORD_HASH=$(printf '%064d:%0128d' 0 0)|" "$ops/.env"
+cp "$ops/.env" "$scratch/original.env"
+echo 'PASS: install refuses to run without administrator authentication'
+
 for invalid in ghcr.io/haipengtian/toonflow:latest ghcr.io/other/toonflow:2.0.9-custom.1; do
   : > "$events"
   if bash "$ops/update.sh" "$invalid" > "$scratch/output" 2>&1; then
@@ -105,3 +112,26 @@ bash "$ops/update.sh" ghcr.io/haipengtian/toonflow:2.0.9-custom.2
 [[ $(cat "$scratch/data/state/current-image") == ghcr.io/haipengtian/toonflow:2.0.9-custom.2 ]]
 [[ $(cat "$scratch/data/state/previous-image") == "$image" ]]
 echo 'PASS: successful upgrade records the new and previous image'
+
+sed -i 's|^TOONFLOW_AUTH_ENABLED=.*|TOONFLOW_AUTH_ENABLED=false|' "$ops/.env"
+if bash "$ops/setup-nginx.sh" admin@example.com > "$scratch/output" 2>&1; then exit 1; fi
+grep -q '开启登录鉴权' "$scratch/output"
+cp "$scratch/original.env" "$ops/.env"
+
+cat > "$scratch/bin/curl" <<'STUB'
+#!/usr/bin/env bash
+if [[ $* == *'/api/auth/session'* ]]; then
+  printf '{"code":200,"data":{"enabled":%s,"authenticated":false}}' "${auth_enabled:-false}"
+elif [[ $* == *'/login'* ]]; then
+  echo '<form action="/api/auth/login">'
+else
+  printf '%s' "${anonymous_code:-200}"
+fi
+STUB
+chmod +x "$scratch/bin/curl"
+if bash "$ops/setup-nginx.sh" admin@example.com > "$scratch/output" 2>&1; then exit 1; fi
+grep -q '未启用登录鉴权' "$scratch/output"
+export auth_enabled=true anonymous_code=200
+if bash "$ops/setup-nginx.sh" admin@example.com > "$scratch/output" 2>&1; then exit 1; fi
+grep -q '匿名接口' "$scratch/output"
+echo 'PASS: public setup rejects disabled auth, old unprotected images and exposed business APIs'
