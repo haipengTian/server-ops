@@ -30,3 +30,4 @@ sudo bash nginx/add-site.sh --domain vpn.thpvip.xyz --upstream http://127.0.0.1:
 | CLIProxyAPI 与个人管理前端 | cpa.thpvip.xyz | 8317 | [cliproxyapi/](cliproxyapi/) |
 | PanSou 盘搜（新服务器） | sou.thpvip.cn | 9000 | [pansou/](pansou/) |
 | 博客（anheyu-app 二开） | blog.thpvip.xyz | 8091 | [迁移部署](anheyu/)；[应用仓库](https://github.com/haipengTian/anheyu-app/tree/custom/deploy) |
+| Toonflow 个人版本 | SSH 隧道，公网域名待定 | 3014 | [toonflow/](toonflow/) |

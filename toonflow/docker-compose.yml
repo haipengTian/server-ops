@@ -1,0 +1,39 @@
+services:
+  toonflow:
+    image: ${TOONFLOW_IMAGE:?先运行 init.sh 设置已发布的个人镜像}
+    restart: unless-stopped
+    init: true
+    security_opt: [no-new-privileges:true]
+    ports:
+      - "127.0.0.1:${TOONFLOW_HOST_PORT:-3014}:3000"
+    volumes:
+      - ${TOONFLOW_DATA_DIR:?先运行 init.sh}/app:/app/data:Z
+    environment:
+      NODE_ENV: production
+      TOONFLOW_DATA_DIR: /app/data
+      TOONFLOW_SERVER_PORT: "3000"
+      TZ: ${TZ:-Asia/Shanghai}
+    mem_limit: ${TOONFLOW_MEM_LIMIT:-2g}
+    cpus: ${TOONFLOW_CPUS:-2}
+    pids_limit: 512
+    stop_grace_period: 60s
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+    healthcheck:
+      test:
+        - CMD
+        - bun
+        - -e
+        - |
+          const base = 'http://127.0.0.1:3000';
+          const page = await fetch(base + '/', { signal: AbortSignal.timeout(5000) });
+          if (!page.ok || !(await page.text()).includes('<html')) process.exit(1);
+          const response = await fetch(base + '/api/workspaces/list', { signal: AbortSignal.timeout(5000) });
+          if (!response.ok) process.exit(1);
+          const result = await response.json();
+          if (result.code !== 200 || !Array.isArray(result.data?.directories)) process.exit(1);
+      interval: 20s
+      timeout: 15s
+      retries: 6
+      start_period: 60s

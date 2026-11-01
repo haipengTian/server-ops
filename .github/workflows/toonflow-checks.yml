@@ -1,0 +1,26 @@
+name: Toonflow deployment checks
+on:
+  push:
+    paths: ['toonflow/**', '.github/workflows/toonflow-checks.yml']
+  pull_request:
+    paths: ['toonflow/**', '.github/workflows/toonflow-checks.yml']
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - name: Shell syntax and lint
+        run: |
+          find toonflow -name '*.sh' -print0 | xargs -0 -n1 bash -n
+          shellcheck -P SCRIPTDIR -x toonflow/*.sh toonflow/tests/*.sh
+      - name: Deployment lifecycle checks
+        run: bash toonflow/tests/run.sh
+      - name: Pull-only Compose configuration
+        run: |
+          cp toonflow/.env.example toonflow/.env
+          trap 'rm -f toonflow/.env' EXIT
+          sed -i 's|^TOONFLOW_IMAGE=.*|TOONFLOW_IMAGE=ghcr.io/haipengtian/toonflow:2.0.9-custom.1|' toonflow/.env
+          docker compose --env-file toonflow/.env -f toonflow/docker-compose.yml config --quiet

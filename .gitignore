@@ -32,3 +32,7 @@ mail-center/backups/
 mail-center/dist/
 mail-center/sources/
 mail-center/tools/
+
+toonflow/.env.*
+!toonflow/.env.example
+toonflow/.operation.lock
