@@ -104,6 +104,25 @@ Test-NetConnection mx.thpvip.xyz -Port 25
 
 ## 更新、备份与恢复
 
+### 已同步邮件分页：Web v0.1.9
+
+每页 50 封，列表底部提供上一页、下一页、当前范围、总数及页码；搜索、未读筛选和切换邮箱回到第一页。打开邮件后返回保留页码与滚动位置，自动刷新保持当前页。只需升级 Web，无需重新同步或重解析邮件。
+
+前端提交 6d85641 和标签 v0.1.9 已推送。本次尚未取得私有流水线终态；先在 [v0.1.9 发布页](https://github.com/haipengTian/mail-center-ui/actions?query=branch%3Av0.1.9) 确认标签工作流成功，再执行：
+
+```bash
+cd /opt/server-ops/mail-center &&
+cp -p .env ".env.before-web-v0.1.9-$(date +%Y%m%d-%H%M%S)" &&
+sed -i 's|^MAIL_CENTER_WEB_IMAGE=.*|MAIL_CENTER_WEB_IMAGE=ghcr.io/haipengtian/mail-center-ui:v0.1.9|' .env &&
+docker compose pull web &&
+docker compose up -d --no-deps --no-build --pull never --wait --wait-timeout 180 web &&
+bash status.sh
+```
+
+只更新 Web 容器，API、数据库和 SMTP 保持运行。刷新网页确认侧栏版本 0.1.9；超过 50 封的列表应可翻页，搜索和未读筛选显示各自总数。已有网关使用 Docker DNS 动态解析 Web 地址，容器更新后会自动重新解析。
+
+拉取失败时旧容器继续运行，先确认标签发布成功及 GHCR 登录权限后重试；已更新但验收失败时，将上面生成的 `.env.before-web-v0.1.9-时间` 文件复制回 `.env`，再运行相同的 `docker compose pull web`、`docker compose up ... web` 和 `bash status.sh`，恢复旧 Web 镜像。
+
 ### 正文优先的完整阅读布局：Web v0.1.8
 
 已有 API v0.1.1 的部署，只升级 Web 到 v0.1.8；API 和 SMTP 镜像保持不变，无需重解析旧邮件。打开邮件后默认隐藏列表及统计，正文使用侧栏外的完整宽度；顶部支持返回列表、上一封、下一封和标为未读，桌面可切换分栏阅读。收件人和大小在“邮件详情”中展开；返回列表保留搜索、未读筛选和滚动位置。保留 v0.1.7 的 QQ / 网易 / Gmail 图标、89px 等高列表，以及自动收取与静默更新。
