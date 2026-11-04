@@ -23,6 +23,8 @@ load_env() {
   [[ ! -L $ENV_FILE ]] || die '.env 不能是符号链接'
   # .env 是数据，不当作 root shell 脚本执行。只接受已知键和字面值。
   local key value line
+  # Optional, opt-in only: inherited shell settings must not enable private uploads.
+  export IMGBED_PRIVATE_STORAGE_CHANNELS=''
   local -A seen=()
   while IFS= read -r line || [[ -n $line ]]; do
     line=${line%$'\r'}
@@ -30,7 +32,7 @@ load_env() {
     [[ $line == *=* ]] || die '.env 存在无效行，格式应为 KEY=value'
     key=${line%%=*}; value=${line#*=}
     case "$key" in
-      IMGBED_IMAGE|IMGBED_DOMAIN|IMGBED_HOST_PORT|IMGBED_DATA_DIR|IMGBED_WAIT_SECONDS|COMPOSE_PROJECT_NAME|BASIC_USER|BASIC_PASS|AUTH_CODE|AI_CONFIG_SECRET|CERTBOT_EMAIL|TZ|IMGBED_MEM_LIMIT|IMGBED_CPUS) ;;
+      IMGBED_IMAGE|IMGBED_DOMAIN|IMGBED_HOST_PORT|IMGBED_DATA_DIR|IMGBED_WAIT_SECONDS|COMPOSE_PROJECT_NAME|BASIC_USER|BASIC_PASS|AUTH_CODE|AI_CONFIG_SECRET|CERTBOT_EMAIL|TZ|IMGBED_MEM_LIMIT|IMGBED_CPUS|IMGBED_PRIVATE_STORAGE_CHANNELS) ;;
       *) die "不支持的配置键：$key" ;;
     esac
     [[ ! ${seen[$key]+set} ]] || die "配置键重复：$key"

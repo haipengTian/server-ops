@@ -22,6 +22,7 @@ jobs:
         run: |
           bash imgbed/tests/run.sh
           bash imgbed/tests/nginx.sh
+          bash imgbed/tests/private-storage-env.sh
       - name: Compose validation with synthetic secrets
         run: |
           cp imgbed/.env.example imgbed/.env
