@@ -15,6 +15,8 @@ services:
       BASIC_PASS: ${BASIC_PASS:?缺少管理员密码}
       AUTH_CODE: ${AUTH_CODE:?缺少上传访问密码}
       AI_CONFIG_SECRET: ${AI_CONFIG_SECRET:?缺少 AI 凭据加密密钥}
+      # 仅新私密上传使用；空值保持关闭，不影响已有公开图床链接。
+      IMGBED_PRIVATE_STORAGE_CHANNELS: ${IMGBED_PRIVATE_STORAGE_CHANNELS:-}
       TZ: ${TZ:-Asia/Shanghai}
     mem_limit: ${IMGBED_MEM_LIMIT:-512m}
     cpus: ${IMGBED_CPUS:-1}
