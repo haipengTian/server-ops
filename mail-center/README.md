@@ -104,6 +104,27 @@ Test-NetConnection mx.thpvip.xyz -Port 25
 
 ## 更新、备份与恢复
 
+### 翻译连接测试与启用提示：Web v0.1.11
+
+本次仅更新网页版，手机端暂停开发。修正“连接测试成功”被误认为“邮件翻译已启用”的提示：设置页显示已保存的启用状态，修改开关后需保存，连接测试不会自动启用翻译。已有 API v0.1.2 的部署无需更新 API、数据库、SMTP 或网关，也不用重新配置密钥、同步或重解析邮件。尚未完成翻译后端升级的部署先执行下一节。
+
+[Web v0.1.11 发布运行 #28](https://github.com/haipengTian/mail-center-ui/actions/runs/41989803043) 已确认 Success（4m 5s），检查、容器验证和 GHCR 推送均成功。在服务器执行：
+
+```bash
+cd /opt/server-ops &&
+git pull --ff-only &&
+cd mail-center &&
+cp -p .env ".env.before-web-v0.1.11-$(date +%Y%m%d-%H%M%S)" &&
+sed -i 's|^MAIL_CENTER_WEB_IMAGE=.*|MAIL_CENTER_WEB_IMAGE=ghcr.io/haipengtian/mail-center-ui:v0.1.11|' .env &&
+docker compose pull web &&
+docker compose up -d --no-deps --no-build --pull never --wait --wait-timeout 180 web &&
+bash status.sh
+```
+
+只重建 Web 容器，API、数据库、SMTP 保持运行。刷新网页确认侧栏版本 0.1.11。在 **设置 → 邮件翻译** 开启“启用邮件翻译”并点击“保存并启用翻译”，确认状态为“已启用”；再测试连接、打开邮件翻译。密钥留空保留原值。
+
+拉取失败时旧容器继续运行；确认 GHCR 登录权限和发布状态后重试。更新后若需回退，将本节生成的 `.env.before-web-v0.1.11-时间` 文件复制回 `.env`，再执行相同的 `docker compose pull web`、`docker compose up ... web` 与 `bash status.sh` 恢复旧 Web。无需恢复数据库。
+
 ### Sub2API 翻译与安卓：API v0.1.2 / Web v0.1.10
 
 本轮同时升级 API 与 Web，SMTP 仍为 v0.1.0。API 启动自动添加翻译配置与译文缓存表，已有邮件无须重新同步或重解析。网关读取超时从 60 秒增加到 300 秒，需重新加载运行中的网关。

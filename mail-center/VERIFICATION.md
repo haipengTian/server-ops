@@ -107,3 +107,10 @@
 
 - Android v1.0.0 已生成本地稳定签名正式 APK，v2验签、3单测、Lint与Release构建通过；Android16模拟器验证启动登录页、菜单外链与断线恢复。真实账号完整流程与实体手机仍待验收。
 - API 提交9cbd3e0和v0.1.2标签已推送；前端发布目标v0.1.10。当前无法取得私有Actions流水线终态，GHCR发布成功待确认；README升级命令明确以两标签工作流success为前提。
+
+## Web v0.1.11：翻译连接测试与启用状态（2026-11-05）
+
+- 用户要求仅发布网页、暂停手机端；前端提交 `4670ab5` 和标签 `v0.1.11` 已推送。发布运行：[Mail Center UI image #28](https://github.com/haipengTian/mail-center-ui/actions/runs/41989803043)。网页 51 项测试、TypeScript、生产构建、1280 / 390 像素隔离浏览器验收与独立审查通过；详细证据见前端 VERIFICATION.md。
+- 目标镜像为 `ghcr.io/haipengtian/mail-center-ui:v0.1.11`；设置页区分连接可用与邮件翻译已启用，开关修改须保存，测试不会自动启用。密钥留空保留，不修改后端契约和数据库。Android v1.1.1 本机改动未纳入此次发布。
+- README 提供仅重建 Web 的升级命令、`.env` 备份与旧镜像回退；现有网关动态解析 Web，API v0.1.2、数据库、SMTP 和网关不需重启。标签流水线成功后再由用户在服务器执行升级，本轮未连接或更改服务器。
+- 已在浏览器确认标签运行 #28 为 Success，耗时 4m 5s，checks 与 image 均成功；同一已验证镜像已推送 GHCR。Actions Summary 的固定引用为 `ghcr.io/haipengtian/mail-center-ui@sha256:44ae7744ce5f7174b2fa4c7a080d4194f1264f5074ea06a3e5605f5e40bb48fa`，版本引用 `ghcr.io/haipengtian/mail-center-ui:v0.1.11` 可用于本节升级。
