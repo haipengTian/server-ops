@@ -2,7 +2,7 @@
 
 目标：`https://img.thpvip.xyz`，仅为 Cloudreve 打开 `cloudreve-test/` 专用测试目录；保留原公开上传及图片链接。服务器升级由用户执行。
 
-应用通过个人 GitHub Actions 发布到 GHCR，服务器使用 `update.sh` 拉取镜像升级，不上传源码包部署。本次目标版本为 `2.7.7-custom.2`；确认对应发布工作流成功后再执行升级。
+应用通过个人 GitHub Actions 发布到 GHCR，服务器使用 `update.sh` 拉取镜像升级，不上传源码包部署。本次统一接口目标版本为 `2.7.7-custom.3`；确认对应发布工作流成功后再执行升级。
 
 ## 一、升级前保留恢复点
 
@@ -26,21 +26,21 @@
 
    备份短暂停写，成功后恢复服务。记录输出备份路径，并保留异机副本。备份包含完整 SQLite/WAL、本地对象、原配置和旧镜像摘要；不得发到聊天或放公开目录。
 
-## 二、仅为测试启用本地私密渠道
+## 二、沿用 ImageBed 的 Telegram 存储
 
-1. 在图床上传设置确认 Cloudflare R2 / `R2_env` 渠道启用，且没有公共域名。Docker 此渠道使用本地磁盘。不要改变现有默认上传渠道或已有 S3 桶权限。
-2. 在服务器本机编辑 `/opt/server-ops/imgbed/.env`，只添加一行（已有同名项则修改，不能重复）：
+1. 保留原 Telegram Bot 和频道，在图床上传设置确认渠道启用。使用图床「网页设置 → 客户端设置」的默认上传类型和名称；未设置时使用 Telegram 和首个启用渠道。Cloudreve 不再重复配置底层渠道。频道应没有公开用户名，并控制成员范围；ImageBed 会拒绝公开目标。
+2. Telegram 无需新增环境变量。此前设置的 `IMGBED_PRIVATE_STORAGE_CHANNELS=cfr2:R2_env` 可保留，不会改走本地磁盘。只有 ImageBed 默认选择 R2/S3 时，才需要此环境变量显式允许非公开渠道，例如：
 
    ```dotenv
    IMGBED_PRIVATE_STORAGE_CHANNELS=cfr2:R2_env
    ```
 
-   值不加引号、空格。空值保持私密上传关闭；旧 `.env` 不含此项也继续可用。
-3. **`2.7.7-custom.2` 镜像发布工作流成功后**执行：
+   值不加引号、空格。空值禁用 R2/S3 私密上传，不影响普通上传和新版 Telegram 私密上传。不要改变已有公开桶权限或域名。
+3. **`2.7.7-custom.3` 镜像发布工作流成功后**执行：
 
    ```bash
    cd /opt/server-ops/imgbed
-   sudo bash update.sh ghcr.io/haipengtian/cloudflare-imgbed:2.7.7-custom.2
+   sudo bash update.sh ghcr.io/haipengtian/cloudflare-imgbed:2.7.7-custom.3
    sudo bash status.sh
    ```
 
@@ -50,9 +50,10 @@
 
 1. 原管理员可登录，匿名管理/上传仍被拒绝；原公开图片 URL 内容正常。普通上传、读取、删除仍按原渠道工作。
 2. 在图床管理页面创建专用 API Token，权限为 `upload`、`manage`、`delete`。只在本机 Cloudreve 的 ImageBed 策略页填入，不发给协作者。
-3. Cloudreve 填 `https://img.thpvip.xyz`、目录 `cloudreve-test`、类型 `cfr2`、名称 `R2_env`。不将其他用户组或已有文件切到新策略；先给测试账号/测试组使用。
+3. Cloudreve 只填 `https://img.thpvip.xyz`、目录 `cloudreve-test` 和 API Token，不选择 Telegram/R2/S3。已创建的测试策略保留，新版忽略旧底层渠道字段。不将其他用户组或已有文件切到新策略；先给测试账号/测试组使用。
 4. 后续联调只在 `cloudreve-test/` 上传小样例：确认内容、重试、Range/视频跳转、下载、匿名直链拒绝、改名移动、删除及重启后保留。远端清理只针对本次明确创建的测试文件。
 5. 只有真实链路通过后，才讨论正式目录、容量、备份与其他用户迁移。HTML 隔离预览、Office 预览仍是独立待办。
+6. Telegram 删除沿用现有语义：移除 ImageBed 记录和读取入口，不撤回频道消息或承诺 Telegram 物理擦除。服务器备份不包含频道中的原始文档。
 
 ## 四、回退
 
