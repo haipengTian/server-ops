@@ -104,6 +104,33 @@ Test-NetConnection mx.thpvip.xyz -Port 25
 
 ## 更新、备份与恢复
 
+### Sub2API 翻译与安卓：API v0.1.2 / Web v0.1.10
+
+本轮同时升级 API 与 Web，SMTP 仍为 v0.1.0。API 启动自动添加翻译配置与译文缓存表，已有邮件无须重新同步或重解析。网关读取超时从 60 秒增加到 300 秒，需重新加载运行中的网关。
+
+先分别确认 [API v0.1.2](https://github.com/haipengTian/mail-center/actions?query=branch%3Av0.1.2) 和 [Web v0.1.10](https://github.com/haipengTian/mail-center-ui/actions?query=branch%3Av0.1.10) 标签工作流 success；再执行（备份期间会短暂停止网页、API 与已启用的 SMTP，完成后恢复）：
+
+```bash
+cd /opt/server-ops &&
+git pull --ff-only &&
+cd mail-center &&
+cp -p .env ".env.before-translation-$(date +%Y%m%d-%H%M%S)" &&
+bash backup.sh &&
+sed -i \
+  -e 's|^MAIL_CENTER_API_IMAGE=.*|MAIL_CENTER_API_IMAGE=ghcr.io/haipengtian/mail-center:v0.1.2|' \
+  -e 's|^MAIL_CENTER_WEB_IMAGE=.*|MAIL_CENTER_WEB_IMAGE=ghcr.io/haipengtian/mail-center-ui:v0.1.10|' .env &&
+bash install.sh &&
+docker compose exec -T gateway nginx -t &&
+docker compose restart gateway &&
+bash status.sh
+```
+
+刷新网页确认版本 0.1.10，进入 **设置 → 邮件翻译**，填写 Sub2API 的公网 HTTPS API 地址、模型及 API Key，优先选 Responses（OpenAI / Codex 分组），保存后测试。启用翻译，再打开一封邮件点击“翻译成中文”，确认标题和正文、切回原文、重复译文缓存及失败重试。密钥在服务器加密保存，不回传页面；编辑留空保留，更换服务地址须重填。
+
+安卓 APK 由前端项目 `android/artifacts/mail-center-1.0.0.apk` 提供，安装后使用同一个管理员账号登录，默认站点 `https://mail.thpvip.xyz`。网页功能随服务器更新，通知继续使用 Telegram；客户端不常驻收信。Android 8.0+，安装与后续同签名升级说明见前端 `android/README.md`。
+
+备份必须保留 `account-encryption.key`、数据库和邮件文件。若更新后需回退，先保存新译文/配置；本轮迁移仅增加两张表，恢复 `.env.before-translation-*` 中旧镜像配置后重新拉取与启动即可恢复原邮件功能，新增表可保留，不手工删除数据库。丢失加密密钥时恢复原文件。
+
 ### 已同步邮件分页：Web v0.1.9
 
 每页 50 封，列表底部提供上一页、下一页、当前范围、总数及页码；搜索、未读筛选和切换邮箱回到第一页。打开邮件后返回保留页码与滚动位置，自动刷新保持当前页。只需升级 Web，无需重新同步或重解析邮件。
