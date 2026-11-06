@@ -1,0 +1,17 @@
+services:
+  cloudreve:
+    image: ${CLOUDREVE_IMAGE:?缺少固定版本镜像}
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
+    security_opt: [no-new-privileges:true]
+    ports:
+      - "127.0.0.1:${CLOUDREVE_HOST_PORT:-5212}:5212"
+    volumes:
+      - ${CLOUDREVE_DATA_DIR:-/opt/cloudreve/data}:/cloudreve/data:Z
+    environment:
+      CR_CONF_System.Listen: ":5212"
+      TZ: ${TZ:-Asia/Shanghai}
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}

@@ -36,3 +36,7 @@ mail-center/tools/
 toonflow/.env.*
 !toonflow/.env.example
 toonflow/.operation.lock
+
+cloudreve/.env.*
+!cloudreve/.env.example
+cloudreve/.operation.lock

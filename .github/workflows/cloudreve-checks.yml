@@ -1,0 +1,22 @@
+name: Cloudreve deployment checks
+on:
+  push:
+    paths: ['cloudreve/**', '.github/workflows/cloudreve-checks.yml']
+  pull_request:
+    paths: ['cloudreve/**', '.github/workflows/cloudreve-checks.yml']
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Shell syntax and lint
+        run: |
+          find cloudreve -name '*.sh' -print0 | xargs -0 -n1 bash -n
+          shellcheck cloudreve/*.sh cloudreve/tests/*.sh
+      - name: Isolated lifecycle failure and recovery tests
+        run: bash cloudreve/tests/run.sh
+      - name: Compose configuration
+        run: |
+          docker compose --env-file cloudreve/.env.example -f cloudreve/compose.yaml config --quiet
