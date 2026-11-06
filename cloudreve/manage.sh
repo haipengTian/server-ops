@@ -41,8 +41,11 @@ load_env() {
     [[ ${seen[$required]+set} ]] || die "缺少配置 $required"
   done
   valid_image "$CLOUDREVE_IMAGE" || die '仅支持个人 GHCR 固定 custom 版本或摘要'
-  [[ $CLOUDREVE_HOST_PORT =~ ^[0-9]{4,5}$ ]] && ((10#$CLOUDREVE_HOST_PORT >= 1024 && 10#$CLOUDREVE_HOST_PORT <= 65535)) || die '端口必须在1024—65535之间'
-  valid_dir "$CLOUDREVE_DATA_DIR" && valid_dir "$CLOUDREVE_BACKUP_DIR" || die '数据和备份路径需为独立绝对目录，不经过符号链接'
+  [[ $CLOUDREVE_HOST_PORT =~ ^[0-9]{4,5}$ ]] || die '端口必须在1024—65535之间'
+  ((10#$CLOUDREVE_HOST_PORT >= 1024 && 10#$CLOUDREVE_HOST_PORT <= 65535)) || die '端口必须在1024—65535之间'
+  if ! valid_dir "$CLOUDREVE_DATA_DIR" || ! valid_dir "$CLOUDREVE_BACKUP_DIR"; then
+    die '数据和备份路径需为独立绝对目录，不经过符号链接'
+  fi
   [[ $CLOUDREVE_DATA_DIR != "$CLOUDREVE_BACKUP_DIR" && $CLOUDREVE_BACKUP_DIR != "$CLOUDREVE_DATA_DIR/"* && $CLOUDREVE_DATA_DIR != "$CLOUDREVE_BACKUP_DIR/"* ]] || die '数据和备份目录不能互相包含'
   [[ $COMPOSE_PROJECT_NAME =~ ^[a-z][a-z0-9_-]{2,40}$ && $TZ =~ ^[A-Za-z_]+(/[A-Za-z0-9_+-]+)*$ ]] || die '项目名称或时区无效'
 }
@@ -101,8 +104,9 @@ case "$action" in
     valid_image "$old" || die '运行中的容器不是个人 Cloudreve 镜像'
     [[ $(docker inspect --format '{{.State.Running}}' "$(cid)") == true ]] || die '应用未运行，先检查上次故障'
     if [[ $action == update ]]; then
-      [[ $# == 1 ]] && valid_image "$1" || die '用法：update.sh ghcr.io/haipengtian/cloudreve:固定版本'
-      (export CLOUDREVE_IMAGE="$1"; compose pull cloudreve)
+      [[ $# == 1 ]] || die '用法：update.sh ghcr.io/haipengtian/cloudreve:固定版本'
+      valid_image "$1" || die '目标镜像必须是个人固定版本或摘要'
+      CLOUDREVE_IMAGE="$1" compose pull cloudreve
       next=$(resolved_image "$1")
       if [[ $old == "$next" ]]; then echo '当前已是目标镜像'; exit 0; fi
     fi
@@ -124,7 +128,7 @@ case "$action" in
     [[ $backup == "$CLOUDREVE_BACKUP_DIR/"* && -f $backup/data.tar.gz && -f $backup/image-ref ]] || die '请选择本服务备份目录中的完整备份'
     IFS= read -r previous < "$backup/image-ref"
     valid_image "$previous" || die '备份镜像引用无效'
-    (export CLOUDREVE_IMAGE="$previous"; compose pull cloudreve)
+    CLOUDREVE_IMAGE="$previous" compose pull cloudreve
     restored="${CLOUDREVE_DATA_DIR}.restore-$(date -u +%Y%m%dT%H%M%SZ)"
     [[ ! -e $restored ]] || die '恢复目录已存在'
     mkdir -- "$restored"
