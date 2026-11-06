@@ -23,7 +23,7 @@ chmod 755 "$TEST_ROOT"
 mkdir -p "$TEST_ROOT/conf.d" "$TEST_ROOT/cert" "$TEST_ROOT/webroot/.well-known/acme-challenge"
 printf acme-token > "$TEST_ROOT/webroot/.well-known/acme-challenge/probe"
 openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj '/CN=vpn.thpvip.xyz' \
-  -addext 'subjectAltName=DNS:vpn.thpvip.xyz,DNS:app.thpvip.xyz' \
+  -addext 'subjectAltName=DNS:vpn.thpvip.xyz,DNS:app.thpvip.xyz,DNS:qqdesk.thpvip.xyz' \
   -keyout "$TEST_ROOT/cert/privkey.pem" -out "$TEST_ROOT/cert/fullchain.pem" >/dev/null 2>&1
 # 让系统分配临时端口，避免占用本机实际服务的 80/443。
 ports=$(python3 - <<'PY'
@@ -53,6 +53,12 @@ render_site() {
 }
 render_site vpn.thpvip.xyz "http://127.0.0.1:$BACKEND_HTTP_PORT"
 render_site app.thpvip.xyz "https://127.0.0.1:$BACKEND_HTTPS_PORT"
+# 仅供隔离测试的凭据；运行时密码由用户在服务器通过 htpasswd 输入。
+printf 'fixture:%s\n' "$(openssl passwd -apr1 'fixture-only')" > "$TEST_ROOT/passwords"
+chmod 644 "$TEST_ROOT/passwords"
+BASIC_AUTH_FILE="$TEST_ROOT/passwords"
+render_site qqdesk.thpvip.xyz "http://127.0.0.1:$BACKEND_HTTP_PORT"
+unset BASIC_AUTH_FILE
 cp "$ROOT/templates/websocket-map.conf" "$TEST_ROOT/conf.d/00-server-ops-websocket-map.conf"
 cat > "$TEST_ROOT/nginx.conf" <<EOF
 worker_processes 1;
@@ -72,6 +78,14 @@ http {
         location = / { return 404; }
         location = /panel/login/ { return 200 'panel-login'; }
         location = /headers { return 200 "\$http_x_forwarded_for|\$http_x_real_ip"; }
+        location = /authorization { return 200 "auth=\$http_authorization"; }
+        location = /websockify {
+            if (\$http_upgrade != websocket) { return 400; }
+            if (\$http_connection != upgrade) { return 400; }
+            add_header Upgrade websocket always;
+            add_header Connection upgrade always;
+            return 101;
+        }
     }
     server {
         listen 127.0.0.1:$BACKEND_HTTPS_PORT ssl;
@@ -104,6 +118,41 @@ echo 'PASS: 真实请求覆盖伪造的客户端 IP 头'
 [[ $(curl --silent --show-error --noproxy '*' --max-time 5 --resolve "vpn.thpvip.xyz:$HTTP_PORT:127.0.0.1" "http://vpn.thpvip.xyz:$HTTP_PORT/.well-known/acme-challenge/probe") == acme-token ]] || die 'ACME webroot 不可达'
 [[ $(curl --silent --show-error --noproxy '*' --max-time 5 --resolve "vpn.thpvip.xyz:$HTTP_PORT:127.0.0.1" --output /dev/null --write-out '%{http_code}' "http://vpn.thpvip.xyz:$HTTP_PORT/panel/login/") == 301 ]] || die 'HTTP 没有跳转 HTTPS'
 echo 'PASS: HTTP 保留 ACME 验证路径，应用访问跳转 HTTPS'
+for path in /panel/login/ /websockify; do
+  for credentials in '' 'fixture:wrong'; do
+    auth_args=()
+    if [[ -n $credentials ]]; then auth_args=(-u "$credentials"); fi
+    [[ $(client qqdesk.thpvip.xyz "${auth_args[@]}" --output /dev/null --write-out '%{http_code}' "https://qqdesk.thpvip.xyz:$HTTPS_PORT$path") == 401 ]] || die '桌面页面或 WebSocket 路径未阻挡匿名/错误密码'
+  done
+done
+[[ $(client qqdesk.thpvip.xyz -u fixture:fixture-only "https://qqdesk.thpvip.xyz:$HTTPS_PORT/panel/login/") == panel-login ]] || die '正确密码不能打开受保护页面'
+[[ $(client qqdesk.thpvip.xyz -u fixture:fixture-only "https://qqdesk.thpvip.xyz:$HTTPS_PORT/authorization") == auth= ]] || die '网关认证凭据泄露给后端'
+[[ $(client vpn.thpvip.xyz -H 'Authorization: Bearer fixture' "https://vpn.thpvip.xyz:$HTTPS_PORT/authorization") == 'auth=Bearer fixture' ]] || die '未启用 Basic Auth 的后端认证被破坏'
+[[ $(curl --silent --show-error --noproxy '*' --max-time 5 --resolve "qqdesk.thpvip.xyz:$HTTP_PORT:127.0.0.1" "http://qqdesk.thpvip.xyz:$HTTP_PORT/.well-known/acme-challenge/probe") == acme-token ]] || die '认证阻止 ACME 续期'
+python3 - "$HTTPS_PORT" "$TEST_ROOT/cert/fullchain.pem" <<'PY'
+import base64
+import socket
+import ssl
+import sys
+
+context = ssl.create_default_context(cafile=sys.argv[2])
+with socket.create_connection(('127.0.0.1', int(sys.argv[1])), timeout=5) as tcp:
+    with context.wrap_socket(tcp, server_hostname='qqdesk.thpvip.xyz') as client:
+        token = base64.b64encode(b'fixture:fixture-only').decode()
+        client.sendall((
+            'GET /websockify HTTP/1.1\r\nHost: qqdesk.thpvip.xyz\r\n'
+            'Upgrade: websocket\r\nConnection: Upgrade\r\n'
+            f'Authorization: Basic {token}\r\n\r\n'
+        ).encode())
+        response = b''
+        while b'\r\n\r\n' not in response:
+            chunk = client.recv(4096)
+            if not chunk:
+                raise SystemExit('WebSocket handshake closed early')
+            response += chunk
+        assert response.startswith(b'HTTP/1.1 101 '), response
+PY
+echo 'PASS: Basic Auth 阻挡匿名和错误密码，正确密码可访问和升级 WebSocket，凭据不进入后端且 ACME 不受影响'
 cat > "$TEST_ROOT/conf.d/00-duplicate.conf" <<EOF
 server {
     listen 127.0.0.1:$HTTP_PORT;

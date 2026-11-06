@@ -1,0 +1,80 @@
+diff --git a/codecs/inbound/message_codec.py b/codecs/inbound/message_codec.py
+index 347a307..1891695 100644
+--- a/codecs/inbound/message_codec.py
++++ b/codecs/inbound/message_codec.py
+@@ -20,6 +20,8 @@ from .cards import QQInboundCardMixin
+ from .text import QQInboundTextMixin
+ 
+ 
++QQ_FACE_ASSET_DIR = Path(__file__).resolve().parents[2] / "assets" / "qq_faces"
++
+ 
+ class QQInboundCodec(QQInboundCardMixin, QQInboundTextMixin):
+     """入站消息编码器。"""
+@@ -322,7 +324,7 @@ class QQInboundCodec(QQInboundCardMixin, QQInboundTextMixin):
+                 continue
+ 
+             if segment_type == "face":
+-                converted_segments.append(self._build_face_text_segment(segment_data))
++                converted_segments.extend(await self._build_face_segments(segment_data))
+                 continue
+ 
+             if segment_type == "image":
+@@ -652,6 +654,25 @@ class QQInboundCodec(QQInboundCardMixin, QQInboundTextMixin):
+                 return None
+         return None
+ 
++    async def _build_face_segments(self, segment_data: Mapping[str, Any]) -> QQSegments:
++        """视觉模式附带原始 PNG/APNG；旧模式的文本与发送行为不变。"""
++        mode = getattr(self._load_settings().plugin, "qq_face_parse_mode", "description")
++        if mode != "visual":
++            return [self._build_face_text_segment(segment_data)]
++
++        face_id = str(segment_data.get("id", "")).strip()
++        name = QQ_FACE_DESCRIPTIONS.get(face_id, "未知表情")
++        label = f"[QQ原生表情：{name}，ID={face_id}]"
++        # 只读取随镜像打包的数字 ID 资源，不接受消息提供的路径或 URL。
++        if face_id.isascii() and face_id.isdecimal() and len(face_id) <= 8:
++            asset_path = QQ_FACE_ASSET_DIR / f"{face_id}.png"
++            if asset_path.is_file():
++                image = await self._build_image_like_segment({"file": str(asset_path)}, is_emoji=False)
++                if image.get("type") == "image":
++                    return [self._build_text_segment(label), image]
++        self._logger.warning(f"QQ原生表情未取得图像: face_id={face_id!r}")
++        return [self._build_text_segment(label[:-1] + "；未取得图像]")]
++
+     def _build_face_text_segment(self, segment_data: Mapping[str, Any]) -> QQSegment:
+         """构造 QQ 原生表情文本段。
+ 
+diff --git a/config.py b/config.py
+index f4a98a9..135806e 100644
+--- a/config.py
++++ b/config.py
+@@ -231,22 +231,22 @@ class QQPluginOptions(PluginConfigBase):
+             "order": 0,
+         },
+     )
+-    qq_face_parse_mode: Literal["description", "emoji"] = Field(
++    qq_face_parse_mode: Literal["description", "emoji", "visual"] = Field(
+         default="description",
+-        description="QQ 自带表情解析模式：转为中文描述或近似 Unicode emoji。",
++        description="QQ 自带表情解析模式：中文名称、近似 Unicode emoji 或原始图片视觉识别。",
+         json_schema_extra={
+             "label": "QQ表情解析模式",
+-            "hint": "[description]模式会把表情转成[流泪]这种形式[emoji]会转成近似emoji表情。",
++            "hint": "description 转为名称；emoji 转为近似 emoji；visual 附带原始图片，动画配合 Read GIF 多帧识别。",
+             "i18n": _schema_i18n(
+                 label_en="QQ face parsing",
+                 label_ja="QQ 標準顔文字の解析",
+                 hint_en=(
+                     "description converts face segments to [流泪]-style text; "
+-                    "emoji prefers an approximate Unicode emoji."
++                    "emoji prefers an approximate Unicode emoji; visual attaches original PNG/APNG assets."
+                 ),
+                 hint_ja=(
+                     "description は顔文字を [流泪] 形式のテキストに変換し、"
+-                    "emoji は近い Unicode 絵文字を優先します。"
++                    "emoji は近い Unicode 絵文字を優先し、visual は元の PNG/APNG を添付します。"
+                 ),
+             ),
+             "order": 1,

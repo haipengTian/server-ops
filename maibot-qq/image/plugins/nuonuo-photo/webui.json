@@ -1,0 +1,261 @@
+{
+  "schema_version": 2,
+  "workspace_title": "糯糯生活照",
+  "pages": [
+    {
+      "id": "studio",
+      "title": "糯糯生活照",
+      "description": "糯糯照片使用固定参考，通用绘图按你的描述生成。",
+      "placement": "sidebar",
+      "icon": "puzzle",
+      "poll_interval_seconds": 5,
+      "auto_refresh": true,
+      "queries": {
+        "status": {
+          "api": "photo_status"
+        }
+      },
+      "actions": {
+        "portrait": {
+          "api": "create_portrait"
+        },
+        "approve": {
+          "api": "approve_portrait",
+          "parameters": {
+            "candidate_id": {
+              "type": "string",
+              "required": true,
+              "max_length": 100
+            }
+          },
+          "arguments": {
+            "candidate_id": {
+              "source": "status",
+              "field": "candidate_id"
+            }
+          },
+          "confirmation": "将这张候选肖像固定为糯糯之后生活照的参考形象？"
+        },
+        "preview": {
+          "api": "preview_life_photo",
+          "parameters": {
+            "scene": {
+              "type": "string",
+              "required": true,
+              "max_length": 1500
+            }
+          }
+        },
+        "draw": {
+          "api": "preview_image",
+          "parameters": {
+            "drawing_scene": {
+              "type": "string",
+              "required": true,
+              "max_length": 1500
+            }
+          }
+        }
+      },
+      "content": [
+        {
+          "type": "card",
+          "label": "生活照工作室",
+          "children": [
+            {
+              "type": "text",
+              "value": {
+                "source": "status",
+                "field": "status"
+              }
+            },
+            {
+              "type": "text",
+              "value": {
+                "source": "status",
+                "field": "error"
+              },
+              "when": {
+                "reference": {
+                  "source": "status",
+                  "field": "error"
+                },
+                "operator": "not_empty"
+              }
+            }
+          ]
+        },
+        {
+          "type": "grid",
+          "columns": 2,
+          "children": [
+            {
+              "type": "card",
+              "label": "1. 生成并确认肖像",
+              "children": [
+                {
+                  "type": "text",
+                  "value": "接近真人的摄影风格。生成一张候选肖像，喜欢之后再确认；重新生成候选不会自动更换固定形象。"
+                },
+                {
+                  "type": "button",
+                  "label": "生成一张候选肖像",
+                  "action": "portrait",
+                  "disabled_when": {
+                    "reference": {
+                      "source": "status",
+                      "field": "busy"
+                    },
+                    "operator": "truthy"
+                  },
+                  "disabled_reason": "正在生成，请等待完成"
+                },
+                {
+                  "type": "image",
+                  "value": {
+                    "source": "status",
+                    "field": "candidate_image"
+                  },
+                  "when": {
+                    "reference": {
+                      "source": "status",
+                      "field": "has_candidate"
+                    },
+                    "operator": "truthy"
+                  }
+                },
+                {
+                  "type": "button",
+                  "label": "就用这个形象",
+                  "action": "approve",
+                  "disabled_when": {
+                    "reference": {
+                      "source": "status",
+                      "field": "can_approve"
+                    },
+                    "operator": "equals",
+                    "expected": false
+                  },
+                  "disabled_reason": "先生成并查看候选肖像"
+                }
+              ]
+            },
+            {
+              "type": "card",
+              "label": "固定参考图",
+              "children": [
+                {
+                  "type": "text",
+                  "value": {
+                    "source": "status",
+                    "field": "reference_label"
+                  }
+                },
+                {
+                  "type": "image",
+                  "value": {
+                    "source": "status",
+                    "field": "reference_image"
+                  },
+                  "when": {
+                    "reference": {
+                      "source": "status",
+                      "field": "reference_ready"
+                    },
+                    "operator": "truthy"
+                  }
+                },
+                {
+                  "type": "text",
+                  "value": "每张生活照都带着这张原始参考图生成，保持脸型、发色和年龄一致。"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "card",
+          "label": "2. 试拍一张生活照",
+          "children": [
+            {
+              "type": "input",
+              "name": "scene",
+              "label": "想看她在哪里、做什么？",
+              "value": "周末午后，在安静的咖啡店靠窗看书，穿浅色日常衣服，自然抓拍，温暖阳光。"
+            },
+            {
+              "type": "button",
+              "label": "生成生活照预览",
+              "action": "preview",
+              "disabled_when": {
+                "reference": {
+                  "source": "status",
+                  "field": "can_preview"
+                },
+                "operator": "equals",
+                "expected": false
+              },
+              "disabled_reason": "先确认固定形象，并等待当前任务完成"
+            },
+            {
+              "type": "text",
+              "value": "这里生成预览并保存在服务器，不发送到QQ。"
+            }
+          ]
+        },
+        {
+          "type": "card",
+          "label": "3. 画其他内容",
+          "children": [
+            {
+              "type": "text",
+              "value": "动物、风景、海报、插画等，不使用糯糯的参考图。"
+            },
+            {
+              "type": "input",
+              "name": "drawing_scene",
+              "label": "想画什么？",
+              "value": "一只趴在窗边晒太阳的小猫，水彩插画风格。"
+            },
+            {
+              "type": "button",
+              "label": "生成绘图预览",
+              "action": "draw",
+              "disabled_when": {
+                "reference": {
+                  "source": "status",
+                  "field": "busy"
+                },
+                "operator": "truthy"
+              },
+              "disabled_reason": "正在生成，请等待完成"
+            }
+          ]
+        },
+        {
+          "type": "card",
+          "label": "最近生成结果",
+          "children": [
+            {
+              "type": "image",
+              "value": {
+                "source": "status",
+                "field": "latest_image"
+              },
+              "when": {
+                "reference": {
+                  "source": "status",
+                  "field": "has_latest"
+                },
+                "operator": "truthy"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "required_capabilities": [
+    "declarative_basic"
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "manifest_version": 2,
+  "id": "haipengtian.nuonuo-photo",
+  "version": "1.1.1",
+  "name": "糯糯生活照",
+  "description": "按语义选择糯糯固定肖像照片或通用绘图，生成并发送到当前聊天。",
+  "author": {"name": "haipengtian", "url": "https://github.com/haipengtian"},
+  "license": "MIT",
+  "urls": {"repository": "https://github.com/haipengtian"},
+  "i18n": {"default_locale": "zh-CN", "supported_locales": ["zh-CN"]},
+  "host_application": {"min_version": "1.3.18", "max_version": "1.3.99"},
+  "sdk": {"min_version": "2.19.0", "max_version": "2.99.99"},
+  "dependencies": [],
+  "capabilities": ["message.get_by_id", "message.get_recent", "llm.generate", "send.image", "send.text"]
+}

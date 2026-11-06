@@ -1,0 +1,73 @@
+name: maibot-qq
+x-logging: &logging
+  driver: json-file
+  options: {max-size: '10m', max-file: '3'}
+services:
+  maibot:
+    image: ${MAIBOT_IMAGE:?Set MAIBOT_IMAGE in .env}
+    restart: unless-stopped
+    init: true
+    environment:
+      TZ: Asia/Shanghai
+      PYTHONUNBUFFERED: '1'
+      MAIBOT_STATISTICS_REPORT_PATH: /instance/data/maibot_statistics.html
+    ports:
+      - '127.0.0.1:${MAIBOT_WEB_PORT:-18011}:8001'
+    volumes:
+      - type: bind
+        source: ${MAIBOT_DATA_DIR:-/opt/maibot-qq}/runtime
+        target: /instance
+        bind: {create_host_path: false, selinux: Z}
+    mem_limit: 2g
+    pids_limit: 512
+    security_opt: [no-new-privileges:true]
+    stop_grace_period: 45s
+    depends_on:
+      snowluma: {condition: service_healthy}
+    healthcheck:
+      test: ['CMD', '/opt/maibot/.venv/bin/python', '-c', "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/api/webui/health', timeout=5)"]
+      interval: 10s
+      timeout: 6s
+      retries: 18
+      start_period: 90s
+    logging: *logging
+  snowluma:
+    image: motricseven7/snowluma:v2.2.1
+    restart: unless-stopped
+    init: true
+    shm_size: 1gb
+    cap_add: [SYS_PTRACE]
+    security_opt: [seccomp=unconfined]
+    environment:
+      TZ: Asia/Shanghai
+      SNOWLUMA_WEBUI_HOST: 0.0.0.0
+      SNOWLUMA_WEBUI_PORT: '5099'
+      SNOWLUMA_HOOK_AUTOLOAD: '1'
+      SNOWLUMA_QQ_FLAGS: '--disable-gpu --disable-software-rasterizer --disable-gpu-compositing'
+    ports:
+      - '127.0.0.1:${SNOWLUMA_WEB_PORT:-15099}:5099'
+      - '127.0.0.1:${SNOWLUMA_VNC_PORT:-16081}:6081'
+    volumes:
+      - type: bind
+        source: ${MAIBOT_DATA_DIR:-/opt/maibot-qq}/snowluma/data
+        target: /app/data
+        bind: {create_host_path: false, selinux: Z}
+      - type: bind
+        source: ${MAIBOT_DATA_DIR:-/opt/maibot-qq}/snowluma/qq-config
+        target: /app/.config
+        bind: {create_host_path: false, selinux: Z}
+      - type: bind
+        source: ${MAIBOT_DATA_DIR:-/opt/maibot-qq}/snowluma/qq-data
+        target: /app/.local/share
+        bind: {create_host_path: false, selinux: Z}
+    mem_limit: 1536m
+    pids_limit: 512
+    ulimits:
+      nofile: {soft: 65536, hard: 1048576}
+    healthcheck:
+      test: ['CMD', 'node', '-e', "Promise.all(['http://127.0.0.1:5099/','http://127.0.0.1:6081/'].map(u=>fetch(u,{signal:AbortSignal.timeout(5000)}).then(r=>{if(!r.ok)throw Error()}))).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 6s
+      retries: 18
+      start_period: 90s
+    logging: *logging

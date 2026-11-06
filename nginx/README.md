@@ -69,6 +69,33 @@ sudo bash nginx/add-site.sh \
 
 首次签发时临时站点只开放 ACME 验证路径，不提供明文面板。Certbot 使用 webroot 模式并配置邮箱、接受 Let's Encrypt 服务条款；有效证书通过 `--keep-until-expiring` 复用。重复执行相同命令可以更新本站配置。
 
+## 给远程桌面加一层网页登录密码
+
+对 noVNC 等管理入口，先在服务器创建密码文件，再发布域名。下面适用于发行版默认的 nginx 工作进程组 `nginx`；若改过工作进程用户，请使用对应组。密码在终端交互输入，不放进命令参数。
+
+```bash
+sudo dnf install -y httpd-tools
+# 首次创建用 -c；已有文件时不带 -c，避免删除其他账号。
+if sudo test -e /etc/nginx/qqdesk.htpasswd; then
+  sudo htpasswd -B /etc/nginx/qqdesk.htpasswd qqadmin
+else
+  sudo htpasswd -cB /etc/nginx/qqdesk.htpasswd qqadmin
+fi
+sudo chown root:nginx /etc/nginx/qqdesk.htpasswd
+sudo chmod 640 /etc/nginx/qqdesk.htpasswd
+if command -v restorecon >/dev/null; then sudo restorecon -v /etc/nginx/qqdesk.htpasswd; fi
+read -rp "证书通知邮箱：" CERT_EMAIL
+sudo bash nginx/add-site.sh \
+  --domain qqdesk.thpvip.xyz \
+  --upstream http://127.0.0.1:16081 \
+  --basic-auth-file /etc/nginx/qqdesk.htpasswd \
+  --email "$CERT_EMAIL"
+```
+
+访问 `https://qqdesk.thpvip.xyz/vnc.html?autoconnect=1&resize=scale`，先输入网页账号 `qqadmin` 和刚设置的密码，再输入原 VNC 密码。桌面后端保持 `127.0.0.1:16081`，不开放公网桌面端口。
+
+此选项保护整个 HTTPS 应用路径，包括 WebSocket，HTTP 的 ACME 验证仍可访问。nginx 不把这层认证的 Authorization 头传入后端。密码文件必须长期保留且 nginx 工作进程可读；脚本检查匿名 HTTPS 返回 401，正确密码与实际桌面连接需在浏览器验证。更新受保护站点时仍需带上 `--basic-auth-file`；省略该选项会按普通无认证站点配置。原有不带此选项的应用保持原来的认证方式。
+
 ## HTTPS 后端
 
 HTTPS 后端默认严格验证证书。若证书签给一个域名、服务只在本机端口监听，用该域名验证证书并发送 SNI：

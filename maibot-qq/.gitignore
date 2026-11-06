@@ -1,0 +1,12 @@
+.env
+data/
+backups/
+dist/
+sources/
+*.tar
+*.tar.gz
+*.partial
+__pycache__/
+tests/__pycache__/
+compose.qq-face.yaml
+.release.lock
