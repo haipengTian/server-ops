@@ -28,6 +28,29 @@ jobs:
           export CLIPROXY_DATA_DIR=/opt/cliproxyapi COMPOSE_PROJECT_NAME=cliproxyapi-custom
           export EGRESS_NETWORK_NAME=cliproxyapi-custom_backend
           docker compose -f cliproxyapi/egress/compose.yml config --quiet
+      - name: Actual released image preflight
+        run: |
+          preflight_root=$(mktemp -d)
+          trap 'rm -rf -- "$preflight_root"' EXIT
+          export CLIPROXY_DATA_DIR="$preflight_root"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          directory = Path(os.environ['CLIPROXY_DATA_DIR']) / 'config'
+          directory.mkdir()
+          config = {
+              'config-version': 8,
+              'server': {'host': '0.0.0.0', 'port': 8317},
+              'management': {'allow-remote': True, 'secret-key': 'a' * 64,
+                             'disable-control-panel': False, 'disable-auto-update-panel': True},
+              'access': {'api-keys': ['b' * 64]},
+          }
+          (directory / 'config.yaml').write_text(json.dumps(config))
+          PY
+          image=ghcr.io/haipengtian/cliproxyapi:8.0.63-custom.1
+          docker pull "$image"
+          source cliproxyapi/lib.sh
+          preflight_config "$image"
       - name: Compose validation with a synthetic image
         run: |
           cp cliproxyapi/.env.example cliproxyapi/.env
