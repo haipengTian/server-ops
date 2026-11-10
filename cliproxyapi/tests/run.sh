@@ -12,6 +12,11 @@ case "$1" in
   info) exit 0 ;;
   image) if [[ $3 == *custom.2* ]]; then echo "$NEW_IMAGE"; else echo "$OLD_IMAGE"; fi; exit 0 ;;
   inspect) cat "$SIM/image"; exit 0 ;;
+  run)
+    echo preflight >> "$SIM/events"
+    cat >/dev/null
+    [[ ${FAIL:-} != preflight ]]
+    exit ;;
   compose) shift ;;
   *) exit 2 ;;
 esac
@@ -141,6 +146,12 @@ export FAIL=pull; run_fail update.sh "$NEW_TAG"; original
 pass 'image pull failure leaves running deployment untouched'
 
 fixture
+export FAIL=preflight; run_fail update.sh "$NEW_TAG"; original
+[[ $(cat "$SIM/events") == $'pull\npreflight' ]] || fail 'preflight failure caused a stop or restart'
+[[ ! -e $DATA/state/last-backup && ! -e $DATA/state/failed-upgrade ]] || fail 'preflight failure changed deployment state'
+pass 'target configuration failure is rejected before interrupting the running service'
+
+fixture
 export FAIL=wait; run_fail update.sh "$NEW_TAG"
 [[ $(cat "$SIM/running") == 0 && -f $DATA/state/failed-upgrade ]] || fail 'failed target not paused'
 [[ $(cat "$SIM/image") == "$NEW_IMAGE" ]] || fail 'unsafe automatic rollback'
@@ -148,6 +159,7 @@ pass 'failed target is paused because startup may have changed configuration or 
 
 fixture
 run_ok update.sh "$NEW_TAG"
+[[ $(head -n 3 "$SIM/events") == $'pull\npreflight\nstop' ]] || fail 'configuration preflight did not precede service stop'
 [[ $(cat "$DATA/state/previous-image") == "$OLD_IMAGE" ]] || fail 'previous image not recorded'
 [[ $(cat "$SIM/image") == "$NEW_IMAGE" ]] || fail 'new image not running'
 pass 'successful upgrade records image digests and the prior release'

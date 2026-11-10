@@ -114,6 +114,22 @@ active_image() {
   [[ -n $cid ]] || die '没有已安装的应用容器，请先 install.sh'
   docker inspect "$cid" --format '{{.Config.Image}}'
 }
+preflight_config() {
+  # Validate with the target image before interrupting writers. Configuration
+  # is passed only through stdin, without mounts, network access or key output.
+  docker run --rm --pull never -i --network none --entrypoint python3 "$1" -c '
+import sys
+from pathlib import Path
+from deploy.readiness import validate_config, validate_static
+try:
+    validate_config(Path("/dev/stdin"))
+    validate_static(Path("/CLIProxyAPI/static"))
+except ValueError as error:
+    print(f"Deployment preflight failed: {error}", file=sys.stderr)
+    sys.exit(1)
+print("Deployment configuration and bundled frontend verified before stopping service.")
+' < "$CLIPROXY_DATA_DIR/config/config.yaml"
+}
 wait_app() {
   # 调用方用 if ! wait_app 时 Bash 会禁用函数内的 errexit，必须显式检查。
   compose up -d --no-deps --wait --wait-timeout "$CLIPROXY_WAIT_SECONDS" cliproxyapi || return 1
