@@ -2,7 +2,7 @@
 
 部署 `haipengTian/CLIProxyAPI` 与 `haipengTian/Cli-Proxy-API-Management-Center` 的配套镜像。管理前端包含在容器中，页面与源码提交、校验和随 Release 记录，自动更新关闭。无需额外数据库，插件默认关闭。
 
-首版 [v8.0.20-custom.1](https://github.com/haipengTian/CLIProxyAPI/releases/tag/v8.0.20-custom.1) 已发布，[正式发布检查](https://github.com/haipengTian/CLIProxyAPI/actions/runs/38535163176) 全部成功，linux/amd64 镜像已实际匿名拉取。固定摘要为 `sha256:1291e33624ac9c7f16e8dec44b68424adeb6aad6c707033581988888c8256674`。服务器安装尚未执行，验证证据见 [verification.md](verification.md)。
+本次同步后端上游 `v8.0.63` 和管理前端 `v1.27.3`，配套镜像版本为 `8.0.63-custom.1`。发布结果与验证证据见 [verification.md](verification.md)，已有服务器按[本次升级说明](UPGRADE-8.0.63-custom.1.md)操作。
 
 ## 首次安装
 
@@ -11,7 +11,7 @@
 主机已用本仓库 `nginx/` 管理 HTTPS 时，从 `server-ops` 根目录执行以下全新安装流程。若要迁移旧服务器的 OAuth 和配置，先保留旧数据与密钥，按迁移方案恢复，不使用全新配置替换。
 
 ```bash
-sudo bash cliproxyapi/init.sh ghcr.io/haipengtian/cliproxyapi:8.0.20-custom.1
+sudo bash cliproxyapi/init.sh ghcr.io/haipengtian/cliproxyapi:8.0.63-custom.1
 sudo vi cliproxyapi/.env
 sudo bash cliproxyapi/install.sh
 sudo bash cliproxyapi/status.sh
@@ -40,7 +40,7 @@ sudo bash nginx/add-site.sh \
 
 ```bash
 cd /opt/server-ops/cliproxyapi
-bash init.sh ghcr.io/haipengtian/cliproxyapi:8.0.20-custom.1
+bash init.sh ghcr.io/haipengtian/cliproxyapi:8.0.63-custom.1
 vi .env
 bash install.sh
 bash status.sh
@@ -95,11 +95,16 @@ bash backup.sh
 ## 升级与兼容回滚
 
 ```bash
-bash update.sh ghcr.io/haipengtian/cliproxyapi:8.0.20-custom.2
-bash rollback.sh --config-compatible
+bash update.sh ghcr.io/haipengtian/cliproxyapi:8.0.63-custom.1
 ```
 
 升级先拉镜像、停写、备份，再切换 digest。新版本尝试启动后可能写回配置或刷新凭证；验收失败时暂停并保留现场，不自动用旧程序读取新数据。`--config-compatible` 表示操作者已检查版本说明并确认配置与凭证能由旧程序读取；兼容回滚会再次备份当前数据。
+
+确认需要回滚且数据兼容后执行：
+
+```bash
+bash rollback.sh --config-compatible
+```
 
 不兼容时，用户选择升级前备份，并先保留故障现场。默认目录下的手动恢复如下；只使用本机脚本生成的完整备份，实际目录修改过时同步调整命令。先替换第一行的备份路径。
 

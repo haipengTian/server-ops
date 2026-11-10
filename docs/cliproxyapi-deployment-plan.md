@@ -1,6 +1,6 @@
 # CLIProxyAPI 个人版本部署方案
 
-日期：2026-10-14。域名由用户确认：`cpa.thpvip.xyz`。
+原始方案日期：2026-10-14。域名由用户确认：`cpa.thpvip.xyz`。2026-11-10 同步更新为后端 `v8.0.63`、管理前端 `v1.27.3`；当前版本的[升级步骤](../cliproxyapi/UPGRADE-8.0.63-custom.1.md)与[验证记录](../cliproxyapi/verification.md)以对应章节为准。以下保留首版部署基线。
 
 ## 目标与交付边界
 
