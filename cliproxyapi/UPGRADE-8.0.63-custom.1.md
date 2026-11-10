@@ -1,5 +1,7 @@
 # CPA 升级到 8.0.63-custom.1
 
+此版本的升级验收额外限制了已有客户端 Key，可能在容器健康后取消上线。请改用修复版 [8.0.63-custom.2 升级说明](UPGRADE-8.0.63-custom.2.md)，先更新运维脚本再升级。
+
 适用于已通过本目录脚本安装的 CPA；版本包含后端上游 `v8.0.63`、管理前端上游 `v1.27.3`，前端构建版本为 `1.27.3-custom.1`。
 
 确认 [Release](https://github.com/haipengTian/CLIProxyAPI/releases/tag/v8.0.63-custom.1) 已发布且对应的 Personal bundled deployment 检查成功后，在服务器执行：
