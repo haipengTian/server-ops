@@ -16,6 +16,7 @@ validate_image "$old"
 (export CLIPROXY_IMAGE="$target"; compose pull cliproxyapi)
 next=$(image_digest "$target")
 if [[ $old == "$next" ]]; then printf '当前已经是目标镜像。\n'; exit 0; fi
+preflight_config "$next" || die '目标镜像未通过配置预检，现有服务保持运行'
 begin_app_transaction "$next"
 transaction_phase=paused
 compose stop cliproxyapi
