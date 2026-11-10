@@ -1,5 +1,33 @@
 # 部署验证记录
 
+## 2026-11-10 上游同步：8.0.63-custom.1
+
+本次同步后端上游 `v8.0.63`（`6db7d4b839d86c5b24e17bbe73bcd4db18ef1b1a`）及管理前端上游 `v1.27.3`（`953fb24`）。前端配套提交为 `e79a62d989a62ff35bcffec2a12a89febdd95761`，构建版本 `1.27.3-custom.1`；个人镜像版本为 `8.0.63-custom.1`。
+
+后端八个合并冲突采用上游现行实现：配置重载串行执行并记录实际载入内容，认证文件快照按来源内容防止旧观察覆盖新保存，WebSocket 在发送终止事件前关闭本地中断窗口。原有回归用例继续保留，认证观察用例改用上游的文件快照契约。更新 Go 至 `1.26.10`、Bun 至 `1.4.3`，删除上游测试中未使用的 `sync.Once` 值复制。个人镜像打包、非 root 用户、挂载目录与升级脚本保持现行入口。
+
+已完成：
+
+- 前端 `bun install --frozen-lockfile`、1,897 项测试、ESLint、TypeScript 和单文件构建通过；[前端 CI](https://github.com/haipengTian/Cli-Proxy-API-Management-Center/actions/runs/42768739666) 成功，[PR #2](https://github.com/haipengTian/Cli-Proxy-API-Management-Center/pull/2) 已合入。浏览器检查登录页渲染、空密钥校验，控制台没有错误。
+- 后端重点包 `internal/watcher`、`internal/watcher/synthesizer`、`sdk/cliproxy/auth`、`sdk/cliproxy`、`sdk/api/handlers/openai` 通过，服务器程序编译通过；部署校验 11 项通过。
+- [后端配套 CI](https://github.com/haipengTian/CLIProxyAPI/actions/runs/42768805458) 全部成功：Linux 全量 Go 测试、编译、配套前端构建、实际 amd64 镜像构建及离线 smoke，通过鉴权、日志目录、配置写入和重建后的密钥持久化。[后端 PR #2](https://github.com/haipengTian/CLIProxyAPI/pull/2) 已合入，正式版本后端提交为 `f9dce13238ca60f49f4dbcbc2ffb604742f8bfec`。
+- 独立 Go 与发布集成审查通过。新版默认键值库 `/CLIProxyAPI/auths/kv.db` 已由现有挂载和停机备份覆盖。
+
+Windows 全量测试有七项环境相关失败，涉及符号链接权限、打开文件或工作目录的清理；未跳过 Linux 全量发布门禁。Windows `go vet` 另报告上游插件加载器的 `unsafe.Pointer` 用法，目标 Linux 镜像由配套 CI 验证。
+
+[正式发布](https://github.com/haipengTian/CLIProxyAPI/actions/runs/42769946007)的 verify 与 publish 全部成功，[v8.0.63-custom.1](https://github.com/haipengTian/CLIProxyAPI/releases/tag/v8.0.63-custom.1) 已发布。服务器升级由用户按照[本次升级说明](UPGRADE-8.0.63-custom.1.md)操作，真实账号调用结果待服务器升级后确认。
+
+| 正式产物 | 值 |
+| --- | --- |
+| 镜像 | `ghcr.io/haipengtian/cliproxyapi:8.0.63-custom.1` |
+| 镜像摘要 | `sha256:9ec6b08ff838c92ddfbcec7f13d10707a1af17866f202e1bcb92ae0e60bb3d7b` |
+| 配套前端版本 | `1.27.3-custom.1` |
+| 架构与用户 | linux/amd64，10001:10001 |
+
+使用独立空 Docker 配置（`auths: {}`）和 crane 0.22.1 实际匿名下载完整镜像到本地 tar，解析到的镜像摘要与 Release 一致；本地 Docker daemon 未启动，实际运行验收由上述 Linux CI 完成。
+
+## 首版部署历史
+
 日期：2026-10-14。以下是本地、云端验证与用户提供的服务器信息；本轮没有登录服务器或替换线上服务。
 
 ## 本地结果
