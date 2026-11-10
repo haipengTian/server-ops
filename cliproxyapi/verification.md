@@ -1,5 +1,33 @@
 # 部署验证记录
 
+## 2026-11-10 升级验收修复：8.0.63-custom.2
+
+服务器升级 `.1` 时容器健康，但部署 readiness 因客户端 Key 策略取消上线并停止目标容器。根因是部署脚本额外要求 Key 至少 24 字符且不能使用模板前缀，超出了后端原有鉴权契约；截图中的错误不能区分具体触发了哪条规则。用户执行 `docker start cliproxyapi-custom-cliproxyapi-1` 后确认管理页面已恢复。
+
+`.2` readiness 保留后端接受的已有短 Key、自定义前缀、内部 ASCII 空格，正规化首尾空白并忽略空白条目；继续验证匿名 API 拒绝、有效客户端 Key 认证及页面完整性。新安装继续生成随机 Key，服务器现有密钥无需更换。运维升级增加目标镜像停机前预检，配置或内置前端检查失败时现有服务继续运行。
+
+已完成的修复验证：
+
+- 18 项 Python 测试通过，覆盖旧式 Key、内部空格、错误 Key 拒绝及重定向拒绝；HTTP fixture 实际核对授权值。
+- [后端 PR #3](https://github.com/haipengTian/CLIProxyAPI/pull/3) 已合并；[PR CI](https://github.com/haipengTian/CLIProxyAPI/actions/runs/42774377224) 完成 Linux Go 全量测试、编译、配套前端验证、实际镜像构建与离线 smoke。真实镜像使用 `legacy-client-key` 验证鉴权、日志和容器重建后的持久化。
+- [运维 PR #11](https://github.com/haipengTian/server-ops/pull/11) 已合并；[CI](https://github.com/haipengTian/server-ops/actions/runs/42774539830) 验证 21 个生命周期场景、ShellCheck、nginx 恢复、Compose，并对实际已发布 `.1` 镜像执行停机前预检，确认非 root Python 入口及 stdin 配置读取可用。
+- 独立 Python 与发布集成审查完成，内部空格兼容问题已在修复及测试中覆盖。
+
+[正式发布](https://github.com/haipengTian/CLIProxyAPI/actions/runs/42775087424)的 verify 与 publish 全部成功，[v8.0.63-custom.2](https://github.com/haipengTian/CLIProxyAPI/releases/tag/v8.0.63-custom.2) 已发布，发布的是通过 smoke 的同一镜像。
+
+| 正式产物 | 值 |
+| --- | --- |
+| 镜像 | `ghcr.io/haipengtian/cliproxyapi:8.0.63-custom.2` |
+| 镜像摘要 | `sha256:2c97a3001bb40868cf8bc3153c6634af2a4fe774bbd978e633a7a81572d36b56` |
+| 后端提交 | `d07415606e4a31048955d3f2b605ad3b280f6451` |
+| 配套前端提交 | `e79a62d989a62ff35bcffec2a12a89febdd95761` |
+| 配套前端版本 | `1.27.3-custom.1` |
+| 架构与用户 | linux/amd64，10001:10001 |
+
+使用独立空 Docker 配置（`auths: {}`）和 crane 0.22.1 完整匿名下载镜像，解析摘要与 Release 一致。从下载的镜像读取运行用户、架构和内嵌 `release.json`，后端提交、前端提交、版本及页面校验和字段与 Release 记录一致。本地 Docker daemon 未启动，实际运行验收由上述 Linux CI 完成。
+
+服务器升级 `.2` 和真实模型调用由用户按照[修复版升级说明](UPGRADE-8.0.63-custom.2.md)执行；管理页面地址保持不变。
+
 ## 2026-11-10 上游同步：8.0.63-custom.1
 
 本次同步后端上游 `v8.0.63`（`6db7d4b839d86c5b24e17bbe73bcd4db18ef1b1a`）及管理前端上游 `v1.27.3`（`953fb24`）。前端配套提交为 `e79a62d989a62ff35bcffec2a12a89febdd95761`，构建版本 `1.27.3-custom.1`；个人镜像版本为 `8.0.63-custom.1`。
