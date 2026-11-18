@@ -6,28 +6,29 @@
 
 ## 当前交付状态
 
-本地部署文件已准备。首次个人镜像尚未发布；GitHub 连接已恢复，产品本地基线已同步到
-实际核实的官方 main `ab80abc6d1f929a6864c8804fd077b509d21fda2`，维护改动尚未提交。
-下文镜像 `0.2.15-custom.1` 是版本格式示例；必须替换成**实际成功发布**的个人版本。
-未连接服务器，未现场验证 DNS、硬件、证书和真实模型调用。
+本次升级目标为 `v0.2.22-custom.1`：官方 v0.2.22 加上后续 GPT-6.2 Sol / Astra 与 Ultra Fast 套餐权限适配，保留现代、经典、Credit 皮肤和 Muse 图片/异步视频功能。
+发布与验证记录见 [产品版本记录](https://github.com/haipengTian/sub2api/blob/main/docs/custom/releases/0.2.22-custom.1.md)。
+服务器是否已升级，以服务器实际部署镜像为准；本次未连接服务器。
 
-## 1. 发布后再登录服务器
+已有部署在维护窗口执行：
+
+```bash
+cd /opt/server-ops/sub2api
+bash update.sh ghcr.io/haipengtian/sub2api:0.2.22-custom.1
+bash status.sh
+```
+
+`update.sh` 会暂停应用、备份并升级。相对 v0.2.19 包含 5 个 SQL 迁移，首次建索引可能延长启动时间，且涉及数据库函数替换；不要直接用 `--database-compatible` 回滚。
+应用健康后，在账号模型白名单、分组/渠道定价和客户端选择中添加 `gpt-6.2-sol` / `gpt-6.2-astra`，验证普通请求、流式、工具调用、用量和扣费。实际模型与档位由上游账号权限决定。
+
+后续产品仓库每六小时检查官方稳定版，自动融合、验证和发布 custom 镜像；发生代码冲突或上游工作流变化时需要人工处理。新模型尚未进入稳定版时，可能需要提前融合对应适配。服务器继续由操作者使用固定版本升级。
+
+## 1. 新服务器准备
 
 在产品仓库完成官方融合、检查和个人 Release，确认目标镜像的架构。
 将本仓库部署文件合入并推送个人 `main`；服务器才能从 main 获取这些文件。
 
 在服务器 root 会话执行（或先 `sudo -i`）：
-
-部署文件尚未推送到仓库时，也可将本次提供的 `sub2api-deploy-2026-10-13.tar.gz`
-上传到服务器 `/tmp`，按下面方式解压到运维目录：
-
-```bash
-mkdir -p /opt/server-ops
-umask 022
-tar --no-same-owner --no-same-permissions -xzf /tmp/sub2api-deploy-2026-10-13.tar.gz -C /opt/server-ops
-```
-
-包内包含部署脚本、操作说明和非敏感配置模板。解压后跳过 clone 步骤，继续环境检查。
 
 ```bash
 # 新服务器未有运维仓库时：
@@ -61,7 +62,7 @@ GHCR 包公开时直接拉取即可。私有包在服务器本地用具有 `read
 
 ```bash
 cd /opt/server-ops/sub2api
-bash init.sh ghcr.io/haipengtian/sub2api:0.2.15-custom.1
+bash init.sh ghcr.io/haipengtian/sub2api:0.2.22-custom.1
 vi .env
 # 填写实际 ADMIN_EMAIL；核对内存/CPU和专用数据目录，其余密钥保留自动生成值。
 bash install.sh
@@ -132,9 +133,8 @@ curl --fail https://proxy.thpvip.xyz/health
 ## 5. 备份与升级
 
 ```bash
-bash backup.sh
-# 镜像版本为格式示例，先替换为实际已发布的新版本：
-bash update.sh ghcr.io/haipengtian/sub2api:0.2.15-custom.2
+# update.sh 在同一维护窗口内自动完成备份：
+bash update.sh ghcr.io/haipengtian/sub2api:0.2.22-custom.1
 bash status.sh
 ```
 
